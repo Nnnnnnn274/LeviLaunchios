@@ -34,8 +34,9 @@ jobs:
 
       - name: Select Xcode
         run: |
-          ls /Applications | grep Xcode
-          sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+          XCODE=$(ls /Applications | grep -E '^Xcode[._]?[0-9]' | sort -V | tail -1)
+          echo "Selected: $XCODE"
+          sudo xcode-select -s "/Applications/$XCODE/Contents/Developer"
           xcodebuild -version
 
       - name: Install XcodeGen
