@@ -38,6 +38,31 @@ static void levi_log(NSString *msg, ...) {
 
 #import <signal.h>
 #import <unistd.h>
+#import <sys/fcntl.h>
+#import <stdio.h>
+
+// Precomputed path to Documents/levilamina.ips (filled at init)
+static char g_ips_path[4096];
+static size_t g_ips_path_len;
+
+static void levi_ensure_ips_path(void) {
+    if (g_ips_path_len > 0) return;
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,
+                                                          NSUserDomainMask, YES);
+    if ([paths count] == 0) return;
+    NSString *p = [paths[0] stringByAppendingPathComponent:@"levilamina.ips"];
+    g_ips_path_len = [p getCString:g_ips_path maxLength:sizeof(g_ips_path)
+                          encoding:NSUTF8StringEncoding];
+}
+
+static void levi_write_ips_async(const char *msg, size_t len) {
+    if (g_ips_path_len == 0) return;
+    int fd = open(g_ips_path, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    if (fd < 0) return;
+    write(fd, msg, len);
+    close(fd);
+    write(STDERR_FILENO, msg, len);
+}
 
 static void levi_signal_handler(int sig) {
     const char *name = "?";
@@ -47,15 +72,24 @@ static void levi_signal_handler(int sig) {
         case SIGBUS:  name = "SIGBUS";  break;
         case SIGILL:  name = "SIGILL";  break;
     }
-    write(STDERR_FILENO, "[LeviLauncher] CRASH: signal ", 28);
-    write(STDERR_FILENO, name, 10);
-    write(STDERR_FILENO, "\n", 1);
+    char buf[256];
+    int n = snprintf(buf, sizeof(buf),
+                     "CRASH: signal %s\nSignal: %d\n\n", name, sig);
+    if (n > 0) levi_write_ips_async(buf, (size_t)n);
     // Restore default and re-raise so ReportCrash generates a .ips
     signal(sig, SIG_DFL);
     raise(sig);
 }
 
 static void levi_exception_handler(NSException *exception) {
+    levi_ensure_ips_path();
+    if (g_ips_path_len > 0) {
+        NSString *crash = [NSString stringWithFormat:
+            @"CRASH: uncaught ObjC exception\nReason: %@\nStack:\n%@\n\n",
+            exception.reason, exception.callStackSymbols];
+        [crash writeToFile:[NSString stringWithUTF8String:g_ips_path]
+                atomically:NO encoding:NSUTF8StringEncoding error:nil];
+    }
     levi_log(@"CRASH: uncaught ObjC exception: %@\n%@",
            exception.reason, exception.callStackSymbols);
     // abort() triggers SIGABRT → levi_signal_handler → re-raise → .ips
@@ -129,6 +163,8 @@ static void levi_launcher_init(void) {
     signal(SIGILL, levi_signal_handler);
 
     @autoreleasepool {
+        // Precompute crash log path while Foundation is safe
+        levi_ensure_ips_path();
         levi_log(@"Constructor running");
         // Schedule on main run loop (more reliable at load time than dispatch_async)
         CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopDefaultMode, ^{
