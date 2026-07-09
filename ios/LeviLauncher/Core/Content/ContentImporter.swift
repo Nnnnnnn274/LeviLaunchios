@@ -25,7 +25,7 @@ final class ContentImporter {
 
         case "zip":
             if let world = try importZIPAsWorld(from: url, into: baseDir.appendingPathComponent("worlds")) {
-                return .world(world)
+                return world
             }
             if let pack = try ResourcePackManager.shared.importPack(from: url, to: baseDir.appendingPathComponent("resource_packs")) {
                 return .resourcePack(pack)

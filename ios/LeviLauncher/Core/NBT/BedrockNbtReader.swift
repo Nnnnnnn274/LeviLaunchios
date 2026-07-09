@@ -118,7 +118,7 @@ struct BedrockNbtReader {
             return arr
 
         case .end:
-            return nil
+            return NSNull()
         }
     }
 
@@ -163,7 +163,7 @@ struct BedrockNbtWriter {
 
         let nameData = tag.name.data(using: .utf8) ?? Data()
         var nameLen = UInt16(nameData.count).bigEndian
-        withUnsafeBytes(of: &nameLen) { data.append($0) }
+        withUnsafeBytes(of: &nameLen) { data.append(contentsOf: $0) }
         data.append(nameData)
 
         try writeValue(tag.type, tag.value, to: &data)
@@ -179,37 +179,37 @@ struct BedrockNbtWriter {
 
         case .short:
             var v = ((value as? NSNumber)?.int16Value ?? 0).bigEndian
-            withUnsafeBytes(of: &v) { data.append($0) }
+            withUnsafeBytes(of: &v) { data.append(contentsOf: $0) }
 
         case .int:
             var v = ((value as? NSNumber)?.int32Value ?? 0).bigEndian
-            withUnsafeBytes(of: &v) { data.append($0) }
+            withUnsafeBytes(of: &v) { data.append(contentsOf: $0) }
 
         case .long:
             var v = ((value as? NSNumber)?.int64Value ?? 0).bigEndian
-            withUnsafeBytes(of: &v) { data.append($0) }
+            withUnsafeBytes(of: &v) { data.append(contentsOf: $0) }
 
         case .float:
             let float = (value as? NSNumber)?.floatValue ?? 0
             var v = float.bitPattern.bigEndian
-            withUnsafeBytes(of: &v) { data.append($0) }
+            withUnsafeBytes(of: &v) { data.append(contentsOf: $0) }
 
         case .double:
             let double = (value as? NSNumber)?.doubleValue ?? 0
             var v = double.bitPattern.bigEndian
-            withUnsafeBytes(of: &v) { data.append($0) }
+            withUnsafeBytes(of: &v) { data.append(contentsOf: $0) }
 
         case .byteArray:
             let bytes = value as? Data ?? Data()
             var len = Int32(bytes.count).bigEndian
-            withUnsafeBytes(of: &len) { data.append($0) }
+            withUnsafeBytes(of: &len) { data.append(contentsOf: $0) }
             data.append(bytes)
 
         case .string:
             let str = value as? String ?? ""
             let strData = str.data(using: .utf8) ?? Data()
             var len = UInt16(strData.count).bigEndian
-            withUnsafeBytes(of: &len) { data.append($0) }
+            withUnsafeBytes(of: &len) { data.append(contentsOf: $0) }
             data.append(strData)
 
         case .list:
@@ -217,7 +217,7 @@ struct BedrockNbtWriter {
             let itemType: NbtTag.TagType = items.first?.type ?? .end
             data.append(itemType.rawValue)
             var len = Int32(items.count).bigEndian
-            withUnsafeBytes(of: &len) { data.append($0) }
+            withUnsafeBytes(of: &len) { data.append(contentsOf: $0) }
             for item in items {
                 try writeValue(item.type, item.value, to: &data)
             }
@@ -232,19 +232,19 @@ struct BedrockNbtWriter {
         case .intArray:
             let arr = value as? [Int32] ?? []
             var len = Int32(arr.count).bigEndian
-            withUnsafeBytes(of: &len) { data.append($0) }
+            withUnsafeBytes(of: &len) { data.append(contentsOf: $0) }
             for val in arr {
                 var v = val.bigEndian
-                withUnsafeBytes(of: &v) { data.append($0) }
+                withUnsafeBytes(of: &v) { data.append(contentsOf: $0) }
             }
 
         case .longArray:
             let arr = value as? [Int64] ?? []
             var len = Int32(arr.count).bigEndian
-            withUnsafeBytes(of: &len) { data.append($0) }
+            withUnsafeBytes(of: &len) { data.append(contentsOf: $0) }
             for val in arr {
                 var v = val.bigEndian
-                withUnsafeBytes(of: &v) { data.append($0) }
+                withUnsafeBytes(of: &v) { data.append(contentsOf: $0) }
             }
 
         case .end:

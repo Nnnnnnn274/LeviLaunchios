@@ -219,7 +219,11 @@ actor MsftAuthManager: NSObject {
 
     private func createMinecraftIdentityPublicKey() throws -> String {
         let keyPair = try EncryptionUtils.createKeyPair()
-        return keyPair.publicKey.data.base64URLEncodedString()
+        var error: Unmanaged<CFError>?
+        guard let data = SecKeyCopyExternalRepresentation(keyPair.publicKey, &error) as Data? else {
+            throw error?.takeRetainedValue() ?? CryptoError.keyGenerationFailed
+        }
+        return data.base64URLEncodedString()
     }
 
     static func parseUsernameAndXuidFromChain(_ data: Data) -> (username: String, xuid: String)? {

@@ -153,7 +153,7 @@ struct ZipReader {
                     throw ZipError.extractionFailed("deflate init failed: \(initResult)")
                 }
 
-                let inflateResult = inflate(&stream, Z_FINISH)
+                let inflateResult = zlib.inflate(&stream, Z_FINISH)
                 inflateEnd(&stream)
 
                 guard inflateResult == Z_STREAM_END || inflateResult == Z_OK else {
