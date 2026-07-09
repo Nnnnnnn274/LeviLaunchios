@@ -6,6 +6,7 @@
 #include <mach-o/dyld.h>
 #include <mach-o/getsect.h>
 #include <mach-o/loader.h>
+#include <mach-o/nlist.h>
 #include <mach/mach.h>
 #include <sys/mman.h>
 #include <vector>

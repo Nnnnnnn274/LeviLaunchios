@@ -13,19 +13,6 @@
 
 namespace Preloader {
 
-    // ── API struct passed to mods (C-compatible) ───────────
-
-    struct PreloaderAPI {
-        void *(*resolveSymbol)(const char *symbolName);
-        bool (*hookCFunction)(const char *symbolName, void *replacement, void **original);
-        bool (*hookObjCMethod)(const char *className, const char *selectorName,
-                               void *replacement, void **original);
-        bool (*isInGame)();
-        void (*onFrame)(void (*callback)(double));
-        void (*onTouch)(void (*callback)(int, double, double));
-        const char *(*minecraftVersion)();
-    };
-
     // ── Internal state ──────────────────────────────────────
 
     static std::mutex s_mutex;
