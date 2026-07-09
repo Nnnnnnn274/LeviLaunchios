@@ -127,8 +127,8 @@ static bool swizzleViewSelector(Class cls, SEL originalSel, IMP hookIMP, SEL *or
     const char *typeEncoding = method_getTypeEncoding(m);
 
     if (class_addMethod(cls, swizzledSel, origIMP, typeEncoding)) {
-        // Swizzle: originalSel now points to hookIMP
-        method_setImplementation(m, hookIMP);
+        // Add/replace originalSel on THIS class only (not superclass)
+        class_replaceMethod(cls, originalSel, hookIMP, typeEncoding);
         if (origOutSel) *origOutSel = swizzledSel;
         return true;
     }
