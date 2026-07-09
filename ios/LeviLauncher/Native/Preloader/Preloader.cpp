@@ -6,6 +6,9 @@
 #include "Native/Hooks/TextureHook.h"
 #include "Native/Hooks/RenderHook.h"
 #include "Native/Hooks/UIHook.h"
+#include "Native/Hooks/ContentRegistry.h"
+#include "Native/Hooks/DimensionAPI.h"
+#include "Native/Hooks/BlockItemAPI.h"
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <dlfcn.h>
@@ -70,6 +73,7 @@ namespace Preloader {
         RenderHook::initialize();
         UIHook::initialize();
         TextureHook::initialize();
+        ContentRegistry::initialize();
 
         s_initialized = true;
         return true;
@@ -186,6 +190,64 @@ namespace Preloader {
             };
             g_modAPI.uiOnViewDidLoad = [](void (*cb)(void *, void *)) {
                 UIHook::onViewDidLoad(UIHook::ViewDidLoadCallback(cb));
+            };
+            // ── Content Registry ──────────────────────────
+            g_modAPI.registryInit = []() -> bool {
+                return ContentRegistry::initialize();
+            };
+            g_modAPI.registryRegister = [](const char *id, const char *name,
+                                            int type, void *nativePtr) {
+                ContentRegistry::registerContent(
+                    id ? id : "", name ? name : "",
+                    (ContentRegistry::RegistryType)type, nativePtr);
+            };
+            g_modAPI.registryHook = [](int type, void (*hook)(int, void *)) {
+                ContentRegistry::onRegistryPopulate(
+                    (ContentRegistry::RegistryType)type,
+                    [hook](ContentRegistry::RegistryType t,
+                           std::vector<ContentRegistry::ContentEntry> &) {
+                        if (hook) hook((int)t, nullptr);
+                    }
+                );
+            };
+            // ── Dimension API ─────────────────────────────
+            g_modAPI.dimensionInit = []() -> bool {
+                return DimensionAPI::initialize();
+            };
+            g_modAPI.dimensionRegister = [](void (*provider)(void *)) {
+                DimensionAPI::onRegisterDimensions(
+                    [provider](std::vector<DimensionAPI::DimensionDefinition> &) {
+                        if (provider) provider(nullptr);
+                    }
+                );
+            };
+            g_modAPI.dimensionPreCreate = [](void (*hook)(const char *, void *)) {
+                if (hook) {
+                    DimensionAPI::onPreCreateDimension(
+                        [hook](const std::string &dimId,
+                               DimensionAPI::DimensionDefinition &settings) {
+                            hook(dimId.c_str(), (void *)&settings);
+                        }
+                    );
+                }
+            };
+            // ── Block/Item API ────────────────────────────
+            g_modAPI.blockItemInit = []() -> bool {
+                return BlockItemAPI::initialize();
+            };
+            g_modAPI.blockRegister = [](void (*provider)(void *)) {
+                BlockItemAPI::onRegisterBlocks(
+                    [provider](std::vector<BlockItemAPI::BlockDefinition> &) {
+                        if (provider) provider(nullptr);
+                    }
+                );
+            };
+            g_modAPI.itemRegister = [](void (*provider)(void *)) {
+                BlockItemAPI::onRegisterItems(
+                    [provider](std::vector<BlockItemAPI::ItemDefinition> &) {
+                        if (provider) provider(nullptr);
+                    }
+                );
             };
         }
         return &g_modAPI;

@@ -25,6 +25,18 @@ namespace Preloader {
         void (*renderOnBeforeFrame)(void (*callback)());
         void (*renderOnFrame)(void (*callback)(double));
         void (*uiOnViewDidLoad)(void (*callback)(void *viewController, void *view));
+        // ── Content Registry ──────────────────────────────
+        bool (*registryInit)();
+        void (*registryRegister)(const char *id, const char *name, int type, void *nativePtr);
+        void (*registryHook)(int type, void (*hook)(int, void *));
+        // ── Dimension API ─────────────────────────────────
+        bool (*dimensionInit)();
+        void (*dimensionRegister)(void (*provider)(void *));
+        void (*dimensionPreCreate)(void (*hook)(const char *, void *));
+        // ── Block/Item API ────────────────────────────────
+        bool (*blockItemInit)();
+        void (*blockRegister)(void (*provider)(void *));
+        void (*itemRegister)(void (*provider)(void *));
     };
 
     // ── Mod info ────────────────────────────────────────────
