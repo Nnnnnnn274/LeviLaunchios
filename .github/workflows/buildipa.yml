@@ -59,27 +59,27 @@ jobs:
                      -scheme "$SCHEME" \
                      -configuration "$CONFIGURATION" \
                      -sdk "$SDK" \
-                     -quiet \
                      CODE_SIGNING_ALLOWED=NO \
                      CLANG_ENABLE_MODULE_DEBUGGING=NO \
                      COMPILER_INDEX_STORE_ENABLE=NO \
                      build 2>&1
 
-      - name: Locate Built Framework
-        id: framework
+      - name: Locate Built Dylib
+        id: dylib
         run: |
-          FRAMEWORK=$(find ~/Library/Developer/Xcode/DerivedData \
-                       -name "LeviLauncher.framework" \
-                       -path "*/$CONFIGURATION-iphoneos/*" \
-                       -type d | head -1)
-          if [ -z "$FRAMEWORK" ]; then
-            echo "ERROR: Could not find built framework"
-            find ~/Library/Developer/Xcode/DerivedData -name "LeviLauncher" -type f 2>/dev/null || true
+          DYLIB=$(find ~/Library/Developer/Xcode/DerivedData \
+                    -name "LeviLauncher" \
+                    -path "*/$CONFIGURATION-iphoneos/*" \
+                    -type f | head -1)
+          if [ -z "$DYLIB" ]; then
+            echo "ERROR: Could not find built dylib"
+            find ~/Library/Developer/Xcode/DerivedData -name "LeviLauncher*" 2>/dev/null
             exit 1
           fi
-          echo "framework-path=$FRAMEWORK" >> "$GITHUB_OUTPUT"
-          echo "Found: $FRAMEWORK"
-          ls -lh "$FRAMEWORK/"
+          echo "dylib-path=$DYLIB" >> "$GITHUB_OUTPUT"
+          echo "Found: $DYLIB"
+          file "$DYLIB"
+          lipo -info "$DYLIB"
 
       - name: Extract Version
         id: version
@@ -92,11 +92,12 @@ jobs:
       - name: Package Dylib
         run: |
           mkdir -p dist
-          cp -R "${{ steps.framework.outputs.framework-path }}" dist/
+          DYLIB="${{ steps.dylib.outputs.dylib-path }}"
+          cp "$DYLIB" "dist/LeviLauncher.dylib"
           cd dist
-          lipo -info LeviLauncher.framework/LeviLauncher
-          zip -r "LeviLauncher-${{ steps.version.outputs.version }}-ios.zip" LeviLauncher.framework/
-          ls -lh dist/
+          ls -lh
+          zip "LeviLauncher-${{ steps.version.outputs.version }}-ios.zip" LeviLauncher.dylib
+          ls -lh
 
       - name: Upload Dylib ZIP
         uses: actions/upload-artifact@v4
