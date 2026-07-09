@@ -3,6 +3,7 @@
 
 #import <Foundation/Foundation.h>
 #import <mach/mach.h>
+#import <objc/message.h>
 #import <unistd.h>
 
 #pragma mark - JIT detection
@@ -32,9 +33,14 @@ static void try_init(void) {
     }
 
     // Register observer and trigger init
-    Class entryClass = NSClassFromString(@"LauncherEntry");
-    id entry = [entryClass shared];
-    [entry initialize];
+    Class entryClass = objc_getClass("LauncherEntry");
+    if (entryClass) {
+        id (*msgSend)(id, SEL) = (id (*)(id, SEL))objc_msgSend;
+        id entry = msgSend((id)entryClass, sel_registerName("shared"));
+        if (entry) {
+            ((void (*)(id, SEL))objc_msgSend)(entry, sel_registerName("initialize"));
+        }
+    }
     [[NSNotificationCenter defaultCenter]
      postNotificationName:@"LeviLauncherInitializationNotification"
      object:nil];
@@ -44,9 +50,14 @@ static void try_init(void) {
 __attribute__((visibility("default")))
 void LeviLauncherInit(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        Class entryClass = NSClassFromString(@"LauncherEntry");
-        id entry = [entryClass shared];
-        [entry initialize];
+        Class entryClass = objc_getClass("LauncherEntry");
+        if (entryClass) {
+            id (*msgSend)(id, SEL) = (id (*)(id, SEL))objc_msgSend;
+            id entry = msgSend((id)entryClass, sel_registerName("shared"));
+            if (entry) {
+                ((void (*)(id, SEL))objc_msgSend)(entry, sel_registerName("initialize"));
+            }
+        }
         [[NSNotificationCenter defaultCenter]
          postNotificationName:@"LeviLauncherInitializationNotification"
          object:nil];
