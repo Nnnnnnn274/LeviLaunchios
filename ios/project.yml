@@ -2,13 +2,12 @@ name: LeviLauncher
 options:
   bundleIdPrefix: com.levimc
   deploymentTarget:
-    iOS: "14.0"
+    iOS: "15.0"
   generateEmptyDirectories: true
   xcodeVersion: "15.0"
 
 settings:
   base:
-    SWIFT_VERSION: "5.9"
     TARGETED_DEVICE_FAMILY: "1,2"
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Manual
@@ -23,12 +22,21 @@ targets:
       - path: LeviLauncher
         type: group
         createIntermediateGroups: true
+        excludes:
+          - "LeviLauncherApp.swift"
+          - "ContentView.swift"
+          - "UI/Views/*.swift"
+          - "Core/CurseForge/*.swift"
+          - "Core/Crash/*.swift"
+          - "Core/Versions/*.swift"
+          - "Core/Mods/ModManager.swift"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.levimc.levilauncher
         MACH_O_TYPE: mh_dylib
         DYLIB_INSTALL_NAME: "@executable_path/LeviLauncher.dylib"
         EXECUTABLE_PREFIX: ""
+        SWIFT_VERSION: "5.0"
         SWIFT_OBJC_BRIDGING_HEADER: LeviLauncher/Native/Bridge/Launcher-Bridging-Header.h
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: LEVI_LAUNCHER
         CLANG_ENABLE_MODULES: YES
@@ -38,7 +46,7 @@ targets:
         CLANG_CXX_LANGUAGE_STANDARD: "c++20"
         CLANG_CXX_LIBRARY: "libc++"
         ENABLE_BITCODE: NO
-        IPHONEOS_DEPLOYMENT_TARGET: "14.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "15.0"
         SUPPORTS_MACCATALYST: NO
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
     info:

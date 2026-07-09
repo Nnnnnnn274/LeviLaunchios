@@ -111,7 +111,7 @@ struct XboxDeviceAuthRequest: Codable {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONEncoder().encode(self)
 
-        let data = try await session.data(for: req)
+        let (data, _) = try await session.data(for: req)
         return try JSONDecoder().decode(XboxDeviceToken.self, from: data)
     }
 }
@@ -130,7 +130,7 @@ struct XboxUserAuthRequest: Codable {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONEncoder().encode(self)
 
-        let data = try await session.data(for: req)
+        let (data, _) = try await session.data(for: req)
         return try JSONDecoder().decode(XboxToken.self, from: data)
     }
 }
@@ -158,7 +158,7 @@ struct XboxXSTSAuthRequest: Codable {
         ]
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let data = try await session.data(for: req)
+        let (data, _) = try await session.data(for: req)
         return try JSONDecoder().decode(XboxToken.self, from: data)
     }
 }
@@ -179,7 +179,7 @@ struct XboxTitleAuthRequest: Codable {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONEncoder().encode(self)
 
-        let data = try await session.data(for: req)
+        let (data, _) = try await session.data(for: req)
         return try JSONDecoder().decode(XboxTitleToken.self, from: data)
     }
 }

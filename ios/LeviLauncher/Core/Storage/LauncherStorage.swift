@@ -13,7 +13,6 @@ struct LauncherStorage {
     static let profileMetadataDir = "metadata"
     static let gamesDir = "games"
     static let mojangDir = "com.mojang"
-    static let crashLogsDir = "crash_logs"
     static let backupsDir = "backups"
     static let worldsDir = "worlds"
 
@@ -88,7 +87,7 @@ struct LauncherStorage {
     }
 
     static var crashLogsDir: URL {
-        let dir = appRoot.appendingPathComponent(crashLogsDir)
+        let dir = appRoot.appendingPathComponent("crash_logs")
         ensureDir(dir)
         return dir
     }

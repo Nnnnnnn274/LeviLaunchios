@@ -71,7 +71,7 @@ actor MsftAuthManager: NSObject {
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
 
-        let data = try await session.data(for: request)
+        let (data, _) = try await session.data(for: request)
         return try JSONDecoder().decode(OAuth20Token.self, from: data)
     }
 
@@ -88,7 +88,7 @@ actor MsftAuthManager: NSObject {
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
 
-        let data = try await session.data(for: request)
+        let (data, _) = try await session.data(for: request)
         return try JSONDecoder().decode(OAuth20Token.self, from: data)
     }
 
@@ -118,10 +118,10 @@ actor MsftAuthManager: NSObject {
             deviceKey: deviceKey
         )
 
-        await XalStorageManager.saveDeviceIdentity(msUserId: token.userId, deviceKey: deviceKey)
+        await XalStorageManager.saveDeviceIdentity(msUserId: token.userId ?? "", deviceKey: deviceKey)
 
         let deviceToken = try await deviceAuthReq.request(session: session)
-        await XalStorageManager.saveDeviceToken(msUserId: token.userId, deviceKey: deviceKey, deviceToken: deviceToken, cfg: cfg)
+        await XalStorageManager.saveDeviceToken(msUserId: token.userId ?? "", deviceKey: deviceKey, deviceToken: deviceToken, cfg: cfg)
         let device = XboxDevice(key: deviceKey, token: deviceToken)
 
         let userToken = try await XboxUserAuthRequest(
@@ -140,7 +140,7 @@ actor MsftAuthManager: NSObject {
                 sandbox: cfg.sandbox,
                 userTokens: [userToken]
             ).request(session: session)
-            await XalStorageManager.saveDefaultTitleUser(msUserId: token.userId)
+            await XalStorageManager.saveDefaultTitleUser(msUserId: token.userId ?? "")
         } catch {
             let titleToken = try await XboxTitleAuthRequest(
                 relyingParty: cfg.userAuthRP,
@@ -151,14 +151,14 @@ actor MsftAuthManager: NSObject {
                 deviceToken: deviceToken,
                 deviceKey: deviceKey
             ).request(session: session)
-            await XalStorageManager.saveTitleToken(msUserId: token.userId, deviceKey: deviceKey, titleToken: titleToken, cfg: cfg)
+            await XalStorageManager.saveTitleToken(msUserId: token.userId ?? "", deviceKey: deviceKey, titleToken: titleToken, cfg: cfg)
             xstsTokenMain = try await XboxXSTSAuthRequest(
                 relyingParty: Self.defaultXstsRelyingParty,
                 tokenType: cfg.tokenType,
                 sandbox: cfg.sandbox,
                 userTokens: [userToken]
             ).request(session: session)
-            await XalStorageManager.saveDefaultTitleUser(msUserId: token.userId)
+            await XalStorageManager.saveDefaultTitleUser(msUserId: token.userId ?? "")
         }
 
         let xstsXboxLive = try await XboxXSTSAuthRequest(
@@ -182,7 +182,7 @@ actor MsftAuthManager: NSObject {
             userTokens: [userToken]
         ).request(session: session)
 
-        await UserTokenStore.save(deviceKey: deviceKey, msUserId: token.userId, cfg: cfg,
+        await UserTokenStore.save(deviceKey: deviceKey, msUserId: token.userId ?? "", cfg: cfg,
                                    userToken: userToken, xstsXboxLive: xstsXboxLive,
                                    xstsPlayfab: xstsPlayfab, xstsRealms: xstsRealms)
         await MsaTokenStore.save(token: token)
@@ -210,7 +210,7 @@ actor MsftAuthManager: NSObject {
         let body: [String: String] = ["identityPublicKey": publicKey]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let data = try await session.data(for: request)
+        let (data, _) = try await session.data(for: request)
         guard let result = Self.parseUsernameAndXuidFromChain(data) else {
             throw AuthError.minecraftIdentityFailed
         }
@@ -261,7 +261,7 @@ actor MsftAuthManager: NSObject {
         request.setValue(identity, forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "content-type")
 
-        let data = try await session.data(for: request)
+        let (data, _) = try await session.data(for: request)
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let users = json["profileUsers"] as? [[String: Any]],
               let user = users.first,
@@ -297,7 +297,7 @@ actor MsftAuthManager: NSObject {
 
     static func saveAccount(token: OAuth20Token, gamertag: String, minecraftUsername: String, xuid: String, avatarUrl: String?) {
         MsftAccountStore.addOrUpdate(
-            msUserId: token.userId,
+            msUserId: token.userId ?? "",
             refreshToken: token.refreshToken,
             gamertag: gamertag,
             minecraftUsername: minecraftUsername,
