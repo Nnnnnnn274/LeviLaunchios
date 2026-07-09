@@ -182,6 +182,9 @@ class InGameModListViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        if indexPath.section == externalSection, indexPath.row < externalMods.count {
+            tapExternalMod(at: indexPath.row)
+        }
     }
 
     // ── Built-in mod cell ───────────────────────────────────────
@@ -233,11 +236,29 @@ class InGameModListViewController: UITableViewController {
             cell.imageView?.tintColor = .systemGray
         } else {
             let mod = externalMods[indexPath.row]
+            let loaded = LauncherBridge.loadedMods() as? [String] ?? []
+            let isLoaded = loaded.contains(mod.fileName)
             cell.textLabel?.text = mod.displayName
-            cell.imageView?.image = UIImage(systemName: mod.isEnabled ? "checkmark.circle.fill" : "circle")
-            cell.imageView?.tintColor = mod.isEnabled ? .systemGreen : .systemGray
+            cell.imageView?.image = UIImage(systemName: isLoaded ? "checkmark.circle.fill" : "circle")
+            cell.imageView?.tintColor = isLoaded ? .systemGreen : .systemGray
         }
         return cell
+    }
+
+    private func tapExternalMod(at index: Int) {
+        let mod = externalMods[index]
+        let loaded = LauncherBridge.loadedMods() as? [String] ?? []
+        guard !loaded.contains(mod.fileName) else { return }
+
+        let cell = tableView.cellForRow(at: IndexPath(row: index, section: externalSection))
+        cell?.textLabel?.text = "Loading..."
+        cell?.accessoryType = .none
+
+        let ok = LauncherBridge.injectMod(mod.entryPath)
+        if ok {
+            mod.isEnabled = true
+        }
+        loadExternalMods()
     }
 }
 
