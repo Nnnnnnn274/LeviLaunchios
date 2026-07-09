@@ -5,6 +5,7 @@ namespace FpsMod {
 
     void setEnabled(bool enabled);
     bool isEnabled();
+    void onFrame();
     int getFps();
 
 } // namespace FpsMod

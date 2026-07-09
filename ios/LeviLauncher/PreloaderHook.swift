@@ -1,36 +1,60 @@
 import Foundation
 import UIKit
 
-// Hooks into Minecraft's ObjC runtime to intercept rendering
+/// Hooks into Minecraft's ObjC runtime via the C++ preloader engine.
+/// Called from LauncherEntry after initialization.
 @objc class MinecraftHook: NSObject {
-    static func swizzle() {
-        // Hook Minecraft's main render loop to inject overlay
-        // This uses ObjC runtime method swizzling
-        guard let originalClass = NSClassFromString("MinecraftViewController") else {
-            NSLog("[LeviLauncher] MinecraftViewController not found - swizzle deferred")
-            return
+    static func install() {
+        // Register frame callback for overlay updates
+        LauncherBridge.onFrame { timestamp in
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("LeviLauncherFrameNotification"),
+                    object: nil,
+                    userInfo: ["timestamp": timestamp]
+                )
+            }
         }
 
-        // Swizzle viewDidAppear to inject our overlay
-        let originalSelector = NSSelectorFromString("viewDidAppear:")
-        let swizzledSelector = #selector(swizzled_viewDidAppear(_:))
-
-        guard let originalMethod = class_getInstanceMethod(originalClass, originalSelector),
-              let swizzledMethod = class_getInstanceMethod(MinecraftHook.self, swizzledSelector) else {
-            return
+        // Register touch callback for mod menu gesture detection
+        LauncherBridge.onTouch { phase, x, y in
+            if phase == 3 { // UITouchPhaseEnded
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("LeviLauncherTouchNotification"),
+                    object: nil,
+                    userInfo: ["x": x, "y": y]
+                )
+            }
         }
 
-        method_exchangeImplementations(originalMethod, swizzledMethod)
-        NSLog("[LeviLauncher] Swizzled MinecraftViewController.viewDidAppear:")
+        NSLog("[LeviLauncher] ObjC hooks installed via preloader engine")
     }
 
-    @objc func swizzled_viewDidAppear(_ animated: Bool) {
-        // Call original (now our swizzled method)
-        _ = self.perform(#selector(swizzled_viewDidAppear(_:)), with: animated)
+    /// Find the Minecraft game view controller by scanning the view hierarchy
+    @objc static func findGameViewController() -> UIViewController? {
+        guard let windowScene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene }).first else { return nil }
 
-        // Present LeviLauncher overlay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            LauncherEntry.shared.initialize()
+        for window in windowScene.windows {
+            if let rootVC = window.rootViewController {
+                if let vc = findInChildVC(rootVC) {
+                    return vc
+                }
+            }
         }
+        return nil
+    }
+
+    private static func findInChildVC(_ vc: UIViewController) -> UIViewController? {
+        let className = NSStringFromClass(type(of: vc))
+        if className.contains("GameView") || className.contains("Minecraft") {
+            return vc
+        }
+        for child in vc.children {
+            if let found = findInChildVC(child) {
+                return found
+            }
+        }
+        return nil
     }
 }

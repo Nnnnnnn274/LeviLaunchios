@@ -1,83 +1,208 @@
 #include "Preloader.hpp"
+#include "Fishhook.hpp"
+#include "Hooks.h"
+#include "MinecraftAPI.hpp"
+
+#include <CoreFoundation/CoreFoundation.h>
 #include <dlfcn.h>
 #include <mach-o/dyld.h>
-#include <mach-o/getsect.h>
-#include <mach/mach.h>
-#include <sys/mman.h>
 #include <cstring>
-#include <vector>
 #include <map>
 #include <mutex>
+#include <vector>
 
 namespace Preloader {
 
+    // ── API struct passed to mods (C-compatible) ───────────
+
+    struct PreloaderAPI {
+        void *(*resolveSymbol)(const char *symbolName);
+        bool (*hookCFunction)(const char *symbolName, void *replacement, void **original);
+        bool (*hookObjCMethod)(const char *className, const char *selectorName,
+                               void *replacement, void **original);
+        bool (*isInGame)();
+        void (*onFrame)(void (*callback)(double));
+        void (*onTouch)(void (*callback)(int, double, double));
+        const char *(*minecraftVersion)();
+    };
+
+    // ── Internal state ──────────────────────────────────────
+
     static std::mutex s_mutex;
+    static bool s_initialized = false;
+    static std::string s_gamePath;
+    static std::string s_minecraftVersion;
+    static int s_majorVersion = 26;
+
     static std::vector<ModInfo> s_loadedMods;
     static std::map<std::string, void *> s_modHandles;
-    static std::string s_gamePath;
-    static bool s_initialized = false;
+
+    // ── Minecraft binary info ────────────────────────────────
+
+    static intptr_t s_baseAddress = 0;
+    static const struct mach_header_64 *s_mh = nullptr;
+
+    static void captureBinaryInfo() {
+        s_mh = (const struct mach_header_64 *)_dyld_get_image_header(0);
+        s_baseAddress = _dyld_get_image_vmaddr_slide(0);
+    }
+
+    static std::string detectMinecraftVersion() {
+        CFBundleRef mainBundle = CFBundleGetMainBundle();
+        if (mainBundle) {
+            CFStringRef key = CFSTR("CFBundleShortVersionString");
+            CFTypeRef value = CFBundleGetValueForInfoDictionaryKey(mainBundle, key);
+            if (value && CFGetTypeID(value) == CFStringGetTypeID()) {
+                char buf[64] = {};
+                if (CFStringGetCString((CFStringRef)value, buf, sizeof(buf),
+                                        kCFStringEncodingUTF8)) {
+                    return std::string(buf);
+                }
+            }
+        }
+        return "26.32";
+    }
+
+    // ── Initialization ──────────────────────────────────────
 
     bool initialize(const std::string &gamePath) {
         std::lock_guard<std::mutex> lock(s_mutex);
         if (s_initialized) return true;
 
         s_gamePath = gamePath;
+        captureBinaryInfo();
 
-        // TODO: iOS-specific initialization
-        // On jailbroken/TrollStore devices, we use:
-        // - fishhook for C function hooking
-        // - MSHookMemory or similar for instruction patching
-        // - dlopen to load mod dylibs
-        // - dyld dynamic linking for injection
+        s_minecraftVersion = detectMinecraftVersion();
+        s_majorVersion = MinecraftAPI::detectVersion(s_minecraftVersion);
+
+        Hooks_Initialize();
 
         s_initialized = true;
         return true;
     }
 
+    bool isInitialized() {
+        return s_initialized;
+    }
+
+    // ── Hooking Engine ─────────────────────────────────────
+
+    bool hookCFunction(const std::string &symbolName, void *replacement, void **original) {
+        fishhook::rebinding reb = { symbolName.c_str(), replacement, original };
+        return fishhook::rebindSymbols(&reb, 1) == 0;
+    }
+
+    bool hookObjCMethod(const std::string &className, const std::string &selectorName,
+                        void *replacement, void **original) {
+        return Hook_ObjCMethod(className.c_str(), selectorName.c_str(),
+                               replacement, original);
+    }
+
+    bool hookObjCMethodExact(const std::string &className, const std::string &selectorName,
+                              void *replacementBlock, void **original) {
+        return Hook_ObjCMethodExact(className.c_str(), selectorName.c_str(),
+                                    replacementBlock, original);
+    }
+
+    void *resolveSymbol(const std::string &mangledName) {
+        return dlsym(RTLD_DEFAULT, mangledName.c_str());
+    }
+
+    uintptr_t scanPattern(const std::string &pattern) {
+        (void)pattern;
+        return 0;
+    }
+
+    // ── Minecraft-Specific Hooks ───────────────────────────
+
     bool hookGameFunctions() {
-        std::lock_guard<std::mutex> lock(s_mutex);
         if (!s_initialized) return false;
 
-        // Hook key Minecraft functions using fishhook or similar
-        // This is platform-specific and depends on the Minecraft iOS version
+        auto cppSyms = MinecraftAPI::cppSymbolsForVersion(s_majorVersion);
+        void *mcTick = resolveSymbol(cppSyms.minecraftTick);
+        (void)mcTick;
 
         return true;
+    }
+
+    bool hookRenderLoop() {
+        return s_initialized;
+    }
+
+    bool hookInput() {
+        return s_initialized;
+    }
+
+    // ── Render / Frame Callbacks ───────────────────────────
+
+    void onFrame(FrameCallback callback) {
+        std::lock_guard<std::mutex> lock(s_mutex);
+        Hooks_AddFrameCallback(std::move(callback));
+    }
+
+    void onTouch(TouchCallback callback) {
+        std::lock_guard<std::mutex> lock(s_mutex);
+        Hooks_AddTouchCallback(std::move(callback));
+    }
+
+    // ── Mod Loading ─────────────────────────────────────────
+
+    static PreloaderAPI g_modAPI = {};
+
+    static PreloaderAPI *getModAPI() {
+        if (!g_modAPI.resolveSymbol) {
+            g_modAPI.resolveSymbol = [](const char *name) -> void * {
+                return dlsym(RTLD_DEFAULT, name);
+            };
+            g_modAPI.hookCFunction = [](const char *name, void *repl, void **orig) -> bool {
+                return hookCFunction(name, repl, orig);
+            };
+            g_modAPI.hookObjCMethod = [](const char *clsName, const char *selName,
+                                          void *repl, void **orig) -> bool {
+                return hookObjCMethod(clsName, selName, repl, orig);
+            };
+            g_modAPI.isInGame = Hooks_IsInGame;
+            g_modAPI.minecraftVersion = []() -> const char * {
+                return s_minecraftVersion.c_str();
+            };
+            g_modAPI.onFrame = [](void (*cb)(double)) {
+                Hooks_AddFrameCallback(FrameCallback(cb));
+            };
+            g_modAPI.onTouch = [](void (*cb)(int, double, double)) {
+                Hooks_AddTouchCallback(TouchCallback(cb));
+            };
+        }
+        return &g_modAPI;
     }
 
     bool loadMod(const std::string &modPath) {
         std::lock_guard<std::mutex> lock(s_mutex);
         if (!s_initialized) return false;
 
-        // Check if already loaded
         for (const auto &mod : s_loadedMods) {
             if (mod.id == modPath) return true;
         }
 
-        // Open the dynamic library
         void *handle = dlopen(modPath.c_str(), RTLD_NOW | RTLD_LOCAL);
         if (!handle) return false;
 
-        // Find and call mod initialization function
-        using InitFunc = void (*)();
-        auto initFunc = reinterpret_cast<InitFunc>(dlsym(handle, "mod_init"));
-        if (initFunc) {
-            initFunc();
-        }
-
-        // Register mod
         ModInfo info;
         info.id = modPath;
-        info.name = modPath.substr(modPath.find_last_of('/') + 1);
         info.enabled = true;
 
         auto nameFunc = reinterpret_cast<const char *(*)()>(dlsym(handle, "mod_name"));
-        if (nameFunc) info.name = nameFunc();
+        info.name = nameFunc ? nameFunc() : modPath.substr(modPath.find_last_of('/') + 1);
 
         auto versionFunc = reinterpret_cast<const char *(*)()>(dlsym(handle, "mod_version"));
         if (versionFunc) info.version = versionFunc();
 
         auto authorFunc = reinterpret_cast<const char *(*)()>(dlsym(handle, "mod_author"));
         if (authorFunc) info.author = authorFunc();
+
+        auto initFunc = reinterpret_cast<void (*)(PreloaderAPI *)>(dlsym(handle, "mod_init"));
+        if (initFunc) {
+            initFunc(getModAPI());
+        }
 
         s_loadedMods.push_back(info);
         s_modHandles[modPath] = handle;
@@ -96,6 +221,7 @@ namespace Preloader {
     std::vector<std::string> getLoadedMods() {
         std::lock_guard<std::mutex> lock(s_mutex);
         std::vector<std::string> result;
+        result.reserve(s_loadedMods.size());
         for (const auto &mod : s_loadedMods) {
             result.push_back(mod.id);
         }
@@ -109,9 +235,25 @@ namespace Preloader {
 
     std::string getModInfo(size_t index) {
         std::lock_guard<std::mutex> lock(s_mutex);
-        if (index >= s_loadedMods.size()) return "";
+        if (index >= s_loadedMods.size()) return {};
         const auto &mod = s_loadedMods[index];
         return mod.id + "|" + mod.name + "|" + mod.version + "|" + mod.author;
+    }
+
+    // ── In-Game State ──────────────────────────────────────
+
+    bool isInGame() {
+        return Hooks_IsInGame();
+    }
+
+    bool isPauseMenuOpen() {
+        return Hooks_IsPauseMenu();
+    }
+
+    // ── Utility ─────────────────────────────────────────────
+
+    const char *minecraftVersion() {
+        return s_minecraftVersion.c_str();
     }
 
 } // namespace Preloader

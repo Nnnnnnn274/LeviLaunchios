@@ -3,23 +3,38 @@
 
 #import <Foundation/Foundation.h>
 
-// Swift-C++ bridge for native preloader and mod injection
-
 NS_ASSUME_NONNULL_BEGIN
+
+typedef void (^LauncherFrameCallback)(double timestamp);
+typedef void (^LauncherTouchCallback)(int phase, double x, double y);
 
 @interface LauncherBridge : NSObject
 
+// Preloader lifecycle
 + (BOOL)initializePreloader:(NSString *)gamePath;
+
+// Mod management
 + (BOOL)injectMod:(NSString *)modPath;
 + (BOOL)isModLoaded:(NSString *)modId;
 + (NSArray<NSString *> *)loadedMods;
++ (int)modCount;
++ (NSString *)modInfoAtIndex:(int)index;
 
+// Inbuilt mods
 + (BOOL)enableZoom:(BOOL)enabled;
 + (BOOL)enableFpsCounter:(BOOL)enabled;
 + (BOOL)enableSnaplook:(BOOL)enabled;
 
-+ (int)modCount;
-+ (NSString *)modInfoAtIndex:(int)index;
+// Game state
++ (BOOL)isInGame;
++ (NSString *)minecraftVersion;
+
+// Callbacks
++ (void)onFrame:(LauncherFrameCallback)callback;
++ (void)onTouch:(LauncherTouchCallback)callback;
+
+// Symbol resolution (for advanced usage)
++ (void * _Nullable)resolveSymbol:(NSString *)symbolName;
 
 @end
 

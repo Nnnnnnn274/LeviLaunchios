@@ -53,6 +53,14 @@ download_ipa() {
         return
     fi
     
+    # Search Downloads folder for Minecraft IPA
+    local downloads_ipa=$(ls ~/Downloads/*.ipa 2>/dev/null | grep -i minecraft | head -1)
+    if [ -n "$downloads_ipa" ]; then
+        IPA_PATH="$downloads_ipa"
+        echo "    Using IPA from Downloads: $IPA_PATH"
+        return
+    fi
+    
     # Try to dump from device
     echo "    Attempting to dump Minecraft from connected device..."
     if command -v frida-ios-dump &> /dev/null; then
@@ -62,7 +70,7 @@ download_ipa() {
     
     if [ ! -f "$IPA_PATH" ]; then
         echo "    WARNING: No IPA found. Place a decrypted Minecraft.ipa in $BUILD_DIR/"
-        echo "    Or provide path: $0 path/to/Minecraft.ipa"
+        echo "    Or in ~/Downloads/, or provide path: $0 path/to/Minecraft.ipa"
         exit 1
     fi
 }
@@ -120,13 +128,20 @@ resign() {
     # Generate entitlements
     ldid -e "$app_path/$(ls "$app_path" | grep -v '.dylib$' | grep -v '.framework$' | head -1)" > "$BUILD_DIR/entitlements.plist" 2>/dev/null || true
     
-    # Create minimal entitlements if needed
-    if [ ! -f "$BUILD_DIR/entitlements.plist" ]; then
-        cat > "$BUILD_DIR/entitlements.plist" << EOF
+    # JIT-specific keys to add (merge into existing entitlements)
+    cat > "$BUILD_DIR/jit_entitlements.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.dynamic-codesigning</key>
+    <true/>
+    <key>com.apple.private.cs.debugger</key>
+    <true/>
+    <key>dynamic-codesigning</key>
+    <true/>
     <key>get-task-allow</key>
     <true/>
     <key>task_for_pid-allow</key>
@@ -136,6 +151,14 @@ resign() {
 </dict>
 </plist>
 EOF
+
+    # Merge JIT entitlements into main entitlements file
+    # If existing entitlements file was created by ldid, use plist merging
+    if [ -f "$BUILD_DIR/entitlements.plist" ]; then
+        # Use PlistBuddy to merge - add any keys from jit_entitlements that aren't already present
+        /usr/libexec/PlistBuddy -c "Merge '$BUILD_DIR/jit_entitlements.plist'" "$BUILD_DIR/entitlements.plist" 2>/dev/null || true
+    else
+        cp "$BUILD_DIR/jit_entitlements.plist" "$BUILD_DIR/entitlements.plist"
     fi
     
     # Sign everything

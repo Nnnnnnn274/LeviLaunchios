@@ -13,24 +13,21 @@ import UIKit
         guard !isInitialized else { return }
         isInitialized = true
 
-        NSLog("[LeviLauncher] Swift initialization started")
-
-        // Listen for the ObjC constructor notification
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleInitialization),
-            name: NSNotification.Name("LeviLauncherInitializationNotification"),
-            object: nil
-        )
-    }
-
-    @objc private func handleInitialization() {
-        NSLog("[LeviLauncher] Initializing LeviLauncher inside Minecraft...")
-
         DispatchQueue.main.async {
+            self.initPreloader()
             self.setupOverlay()
             self.loadAccounts()
-            self.setupMinecraftHooks()
+        }
+    }
+
+    private func initPreloader() {
+        let bundlePath = Bundle.main.bundlePath
+        let result = LauncherBridge.initializePreloader(bundlePath)
+        if result {
+            NSLog("[LeviLauncher] Preloader initialized for Minecraft \(LauncherBridge.minecraftVersion())")
+            MinecraftHook.install()
+        } else {
+            NSLog("[LeviLauncher] Preloader initialization failed")
         }
     }
 
@@ -44,23 +41,11 @@ import UIKit
         overlayWindow = UIWindow(windowScene: windowScene)
         overlayWindow?.rootViewController = overlayVC
         overlayWindow?.windowLevel = .alert + 100
-        overlayWindow?.makeKeyAndVisible()
+        overlayWindow?.isHidden = false
     }
 
     private func loadAccounts() {
         let accounts = MsftAccountStore.list()
         NSLog("[LeviLauncher] Found \(accounts.count) account(s)")
-    }
-
-    private func setupMinecraftHooks() {
-        // Hook into Minecraft rendering to display overlay
-        // This uses C++ preloader hooks via LauncherBridge
-    }
-}
-
-// Called from ObjC constructor
-extension NSObject {
-    @objc static func leviLauncherModuleInit() {
-        LauncherEntry.shared.initialize()
     }
 }

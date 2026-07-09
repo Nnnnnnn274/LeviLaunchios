@@ -3,7 +3,6 @@
 #import <mach-o/dyld.h>
 #import <Foundation/Foundation.h>
 
-// C++ preloader headers
 #include "../Preloader/Preloader.hpp"
 #include "../InbuiltMods/ZoomMod.hpp"
 #include "../InbuiltMods/FpsMod.hpp"
@@ -22,6 +21,17 @@ static bool g_preloaderInitialized = false;
     if (result) {
         result = Preloader::hookGameFunctions();
         if (result) {
+            result = Preloader::hookRenderLoop();
+        }
+        if (result) {
+            result = Preloader::hookInput();
+        }
+        if (result) {
+            // Register FPS counter to tick on every frame
+            Preloader::onFrame([](double) {
+                FpsMod::onFrame();
+            });
+
             g_preloaderInitialized = true;
         }
     }
@@ -31,9 +41,7 @@ static bool g_preloaderInitialized = false;
 
 + (BOOL)injectMod:(NSString *)modPath {
     if (!g_preloaderInitialized) return NO;
-
-    const char *path = [modPath UTF8String];
-    return Preloader::loadMod(path) ? YES : NO;
+    return Preloader::loadMod([modPath UTF8String]) ? YES : NO;
 }
 
 + (BOOL)isModLoaded:(NSString *)modId {
@@ -71,6 +79,30 @@ static bool g_preloaderInitialized = false;
 + (NSString *)modInfoAtIndex:(int)index {
     auto info = Preloader::getModInfo(index);
     return [NSString stringWithUTF8String:info.c_str()];
+}
+
++ (BOOL)isInGame {
+    return Preloader::isInGame() ? YES : NO;
+}
+
++ (NSString *)minecraftVersion {
+    return [NSString stringWithUTF8String:Preloader::minecraftVersion()];
+}
+
++ (void)onFrame:(LauncherFrameCallback)callback {
+    Preloader::onFrame([callback](double ts) {
+        callback(ts);
+    });
+}
+
++ (void)onTouch:(LauncherTouchCallback)callback {
+    Preloader::onTouch([callback](int phase, double x, double y) {
+        callback(phase, x, y);
+    });
+}
+
++ (void *)resolveSymbol:(NSString *)symbolName {
+    return Preloader::resolveSymbol([symbolName UTF8String]);
 }
 
 @end
