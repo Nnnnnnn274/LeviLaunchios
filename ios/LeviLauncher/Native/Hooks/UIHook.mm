@@ -18,8 +18,8 @@ namespace UIHook {
             std::lock_guard<std::mutex> lock(g_mutex);
             for (auto &cb : g_viewDidLoadCallbacks) {
                 if (cb) {
-                    void *view = ((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("view"));
-                    cb((void *)self, view);
+                    void *view = (__bridge void *)((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("view"));
+                    cb((__bridge void *)self, view);
                 }
             }
         }
