@@ -114,33 +114,31 @@ jobs:
           if-no-files-found: error
 
       - name: Release to GitHub Releases
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/LeviLauncher-${{ steps.version.outputs.version }}-ios.zip
-          append_body: true
-          body: |
-            ## LeviLauncher iOS ${{ steps.version.outputs.version }}
-
-            Pre-built `.dylib` for injection into Minecraft: Bedrock Edition.
-
-            **Usage:**
-            ```
-            # Extract
-            unzip LeviLauncher-${{ steps.version.outputs.version }}-ios.zip
-
-            # Inject into Minecraft.app
-            optool install -c load \\
-              -p @executable_path/Frameworks/LeviLauncher.framework/LeviLauncher \\
-              -t Minecraft.app/Minecraft
-
-            # Re-sign
-            ldid -S Minecraft.app
-            ```
-
-            **Requirements:** Jailbroken device or TrollStore, decrypted Minecraft IPA.
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="v${VERSION}-build-${{ github.run_number }}"
+          cat > /tmp/release-notes.md <<-EOF
+          ## LeviLauncher iOS ${VERSION}
+
+          Pre-built \`.dylib\` for injection into Minecraft: Bedrock Edition.
+
+          **Usage:**
+          \`\`\`
+          unzip LeviLauncher-${VERSION}-ios.zip
+          optool install -c load \\
+            -p @executable_path/LeviLauncher.dylib \\
+            -t Minecraft.app/Minecraft
+          ldid -S Minecraft.app
+          \`\`\`
+
+          **Requirements:** Jailbroken device or TrollStore, decrypted Minecraft IPA.
+          EOF
+          gh release create "$TAG" \
+            "dist/LeviLauncher-${VERSION}-ios.zip" \
+            --title "LeviLauncher iOS ${VERSION} (build ${{ github.run_number }})" \
+            --notes-file /tmp/release-notes.md
 
       - name: Notify Discord
         env:
