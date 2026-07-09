@@ -1,7 +1,7 @@
 import Foundation
 import UIKit
 
-@objc public class LauncherEntry: NSObject {
+@objc(LauncherEntry) public class LauncherEntry: NSObject {
     @objc public static let shared = LauncherEntry()
 
     private var isInitialized = false

@@ -9,15 +9,19 @@
 
 #pragma mark - Diagnostics (write to app's Documents dir)
 
-static void levi_log(NSString *msg) {
-    NSLog(@"[LeviLauncher] %@", msg);
+static void levi_log(NSString *msg, ...) {
+    va_list args;
+    va_start(args, msg);
+    NSString *formatted = [[NSString alloc] initWithFormat:msg arguments:args];
+    va_end(args);
+    NSLog(@"[LeviLauncher] %@", formatted);
     @try {
         NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,
-                                                              NSUserDomainMask, YES);
+                                                               NSUserDomainMask, YES);
         if ([paths count] > 0) {
             NSString *logPath = [paths[0] stringByAppendingPathComponent:@"levilauncher.log"];
-            NSString *line = [NSString stringWithFormat:@"%@: %@\n",
-                              [NSISO8601DateFormatter new], msg];
+            NSString *dateStr = [[NSISO8601DateFormatter new] stringFromDate:[NSDate now]];
+            NSString *line = [NSString stringWithFormat:@"%@: %@\n", dateStr, formatted];
             NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:logPath];
             if (!fh) {
                 [line writeToFile:logPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
@@ -32,14 +36,25 @@ static void levi_log(NSString *msg) {
 
 #pragma mark - Initialization
 
-static void try_init(void) {
-    // Poll until the Swift runtime has loaded LauncherEntry
+static void try_init(int retry) {
+    // Primary: exact name with explicit @objc(LauncherEntry)
     Class entryClass = objc_getClass("LauncherEntry");
+    // Fallback: if we exhausted retries, try mangled Swift names
+    if (!entryClass && retry >= 60) {
+        levi_log(@"Gave up after 60 retries. Trying mangled names...");
+        entryClass = objc_getClass("_TtC12LeviLauncher14LauncherEntry");
+        if (!entryClass) entryClass = objc_getClass("LeviLauncher.LauncherEntry");
+        if (!entryClass) {
+            levi_log(@"Swift class never registered on ObjC runtime");
+            return;
+        }
+        levi_log(@"Found via mangled name");
+    }
     if (!entryClass) {
-        levi_log(@"LauncherEntry not found yet, polling...");
+        levi_log(@"LauncherEntry not found yet (retry %d/60)...", retry);
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
-            try_init();
+            try_init(retry + 1);
         });
         return;
     }
@@ -82,7 +97,7 @@ static void levi_launcher_init(void) {
         levi_log(@"Constructor running");
         // Schedule on main run loop (more reliable at load time than dispatch_async)
         CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopDefaultMode, ^{
-            try_init();
+            try_init(0);
         });
         CFRunLoopWakeUp(CFRunLoopGetMain());
     }
