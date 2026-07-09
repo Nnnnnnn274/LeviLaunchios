@@ -69,7 +69,7 @@ final class MsftAccountStore {
         var target: MsftAccount?
         if let idx = accounts.firstIndex(where: { $0.msUserId == msUserId }) {
             target = accounts[idx]
-            target?.refreshToken = refreshToken ?? target?.refreshToken
+            if let refreshToken = refreshToken { target?.refreshToken = refreshToken }
             if let g = gamertag, !g.isEmpty { target?.xboxGamertag = g }
             if let u = minecraftUsername, !u.isEmpty { target?.minecraftUsername = u }
             if let x = xuid, !x.isEmpty { target?.xuid = x }
