@@ -51,6 +51,8 @@ targets:
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
     info:
       path: LeviLauncher/Info.plist
+    dependencies:
+      - framework: AuthenticationServices.framework
     preBuildScripts:
       - name: "Create Config Files"
         script: |

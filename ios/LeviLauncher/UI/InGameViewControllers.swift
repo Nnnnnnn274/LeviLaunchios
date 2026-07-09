@@ -1,5 +1,4 @@
 import UIKit
-import AuthenticationServices
 
 // MARK: - Minecraft-style helpers
 private func mcLabel(_ text: String, size: CGFloat = 15) -> UILabel {
@@ -54,12 +53,7 @@ private func styleNav(_ vc: UIViewController) {
 
 // MARK: - In-Game Account Management
 
-class InGameAccountViewController: UITableViewController, ASWebAuthenticationSessionPresentationContextProviding {
-    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        view.window ?? UIApplication.shared.connectedScenes
-            .compactMap { ($0 as? UIWindowScene)?.keyWindow }
-            .first ?? UIWindow()
-    }
+class InGameAccountViewController: UITableViewController {
     private var accounts: [MsftAccount] = []
 
     override func viewDidLoad() {
@@ -246,7 +240,7 @@ class InGameModListViewController: UITableViewController {
     }
 
     private func tapExternalMod(at index: Int) {
-        let mod = externalMods[index]
+        var mod = externalMods[index]
         let loaded = LauncherBridge.loadedMods() as? [String] ?? []
         guard !loaded.contains(mod.fileName) else { return }
 

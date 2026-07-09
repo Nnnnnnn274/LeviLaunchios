@@ -79,7 +79,7 @@ final class MainViewModel: ObservableObject {
                 }
             }
             session.prefersEphemeralWebBrowserSession = true
-            session.presentationContextProvider = viewController as? ASWebAuthenticationSessionPresentationContextProviding
+            setPresentationProvider(for: session, viewController: viewController)
             if !session.start() {
                 continuation.resume(throwing: AuthError.invalidAccount)
             }
@@ -95,4 +95,22 @@ final class MainViewModel: ObservableObject {
         }
         return code
     }
+}
+
+// Runtime-based presentation context provider (avoids compile-time dependency
+// on the removed/deprecated ASWebAuthenticationSessionPresentationContextProviding protocol)
+private class _AuthProvider: NSObject {
+    weak var window: UIWindow?
+    init(window: UIWindow?) { self.window = window }
+    @objc(presentationAnchorForWebAuthenticationSession:)
+    func anchor(for session: Any) -> Any? { return window }
+}
+
+private func setPresentationProvider(for session: ASWebAuthenticationSession, viewController: UIViewController) {
+    let window = viewController.view.window ?? UIApplication.shared.connectedScenes
+        .compactMap { ($0 as? UIWindowScene)?.keyWindow }
+        .first
+    let provider = _AuthProvider(window: window)
+    objc_setAssociatedObject(session, UnsafeRawPointer(bitPattern: 1)!, provider, .OBJC_ASSOCIATION_RETAIN)
+    session.perform(NSSelectorFromString("setPresentationContextProvider:"), with: provider)
 }
