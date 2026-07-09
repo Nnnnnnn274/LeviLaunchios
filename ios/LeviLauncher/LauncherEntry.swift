@@ -16,6 +16,7 @@ import UIKit
 
         DispatchQueue.main.async {
             self.initPreloader()
+            BuiltinModManager.shared.loadPersistedState()
             self.registerUIHook()
             self.loadAccounts()
         }

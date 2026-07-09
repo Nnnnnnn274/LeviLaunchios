@@ -24,6 +24,10 @@ typedef void (^LauncherTouchCallback)(int phase, double x, double y);
 + (BOOL)enableZoom:(BOOL)enabled;
 + (BOOL)enableFpsCounter:(BOOL)enabled;
 + (BOOL)enableSnaplook:(BOOL)enabled;
++ (int)fpsValue;
++ (BOOL)isZoomEnabled;
++ (BOOL)isFpsCounterEnabled;
++ (BOOL)isSnaplookEnabled;
 
 // Game state
 + (BOOL)isInGame;

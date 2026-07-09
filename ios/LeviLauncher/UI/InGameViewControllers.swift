@@ -125,8 +125,12 @@ class InGameAccountViewController: UITableViewController, ASWebAuthenticationSes
 
 // MARK: - In-Game Mod List
 
+private let builtinSection = 0
+private let externalSection = 1
+
 class InGameModListViewController: UITableViewController {
-    private var mods: [Mod] = []
+    private var externalMods: [Mod] = []
+    private var builtinMods: [BuiltinMod] { BuiltinModManager.shared.mods }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -140,14 +144,14 @@ class InGameModListViewController: UITableViewController {
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
         tableView.backgroundColor = mcBg
         tableView.separatorColor = mcBorder
-        loadMods()
+        loadExternalMods()
     }
 
-    private func loadMods() {
+    private func loadExternalMods() {
         let modsDir = LauncherStorage.minecraftRoot.appendingPathComponent("mods")
         guard let contents = try? FileManager.default.contentsOfDirectory(at: modsDir,
                             includingPropertiesForKeys: nil) else { return }
-        mods = contents.compactMap { url -> Mod? in
+        externalMods = contents.compactMap { url -> Mod? in
             guard url.pathExtension == "dylib" else { return nil }
             return Mod(id: url.lastPathComponent, fileName: url.lastPathComponent,
                        entryPath: url.path, displayName: url.deletingPathExtension().lastPathComponent)
@@ -157,11 +161,65 @@ class InGameModListViewController: UITableViewController {
 
     @objc private func addMod() {}
 
+    // ── Sections ────────────────────────────────────────────────
+
+    override func numberOfSections(in tableView: UITableView) -> Int { 2 }
+
+    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        section == builtinSection ? "Built-in" : "External"
+    }
+
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        max(mods.count, 1)
+        section == builtinSection ? builtinMods.count : max(externalMods.count, 1)
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        if indexPath.section == builtinSection {
+            return cellForBuiltinMod(at: indexPath)
+        }
+        return cellForExternalMod(at: indexPath)
+    }
+
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+    }
+
+    // ── Built-in mod cell ───────────────────────────────────────
+
+    private func cellForBuiltinMod(at indexPath: IndexPath) -> UITableViewCell {
+        let mod = builtinMods[indexPath.row]
+        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+        cell.backgroundColor = mcCellBg
+        cell.textLabel?.text = mod.displayName
+        cell.textLabel?.textColor = UIColor(red: 0.9, green: 0.9, blue: 0.9, alpha: 1)
+        cell.textLabel?.font = UIFont(name: "Menlo-Bold", size: 13) ?? .boldSystemFont(ofSize: 13)
+        cell.textLabel?.shadowColor = UIColor(white: 0, alpha: 0.5)
+        cell.textLabel?.shadowOffset = CGSize(width: 1, height: 1)
+        cell.detailTextLabel?.text = mod.desc
+        cell.detailTextLabel?.textColor = UIColor(red: 0.6, green: 0.6, blue: 0.6, alpha: 1)
+        cell.detailTextLabel?.font = UIFont(name: "Menlo", size: 10) ?? .systemFont(ofSize: 10)
+        cell.imageView?.image = UIImage(systemName: mod.icon)
+        cell.imageView?.tintColor = UIColor(red: 0.5, green: 0.7, blue: 0.5, alpha: 1)
+        cell.selectionStyle = .none
+
+        let toggle = UISwitch()
+        toggle.isOn = mod.isEnabled
+        toggle.onTintColor = UIColor(red: 0.3, green: 0.7, blue: 0.3, alpha: 1)
+        toggle.tag = mod.id.rawValue
+        toggle.addTarget(self, action: #selector(builtinToggled(_:)), for: .valueChanged)
+        cell.accessoryView = toggle
+        return cell
+    }
+
+    @objc private func builtinToggled(_ sender: UISwitch) {
+        guard let modID = BuiltinModID(rawValue: sender.tag) else { return }
+        let mod = builtinMods.first { $0.id == modID }
+        mod?.isEnabled = sender.isOn
+    }
+
+    // ── External mod cell ───────────────────────────────────────
+
+    private func cellForExternalMod(at indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
         cell.backgroundColor = mcCellBg
         cell.textLabel?.textColor = UIColor(red: 0.9, green: 0.9, blue: 0.9, alpha: 1)
@@ -169,21 +227,17 @@ class InGameModListViewController: UITableViewController {
         cell.textLabel?.shadowColor = UIColor(white: 0, alpha: 0.5)
         cell.textLabel?.shadowOffset = CGSize(width: 1, height: 1)
 
-        if mods.isEmpty {
+        if externalMods.isEmpty {
             cell.textLabel?.text = "No mods installed"
             cell.imageView?.image = UIImage(systemName: "wrench.and.screwdriver")
             cell.imageView?.tintColor = .systemGray
         } else {
-            let mod = mods[indexPath.row]
+            let mod = externalMods[indexPath.row]
             cell.textLabel?.text = mod.displayName
             cell.imageView?.image = UIImage(systemName: mod.isEnabled ? "checkmark.circle.fill" : "circle")
             cell.imageView?.tintColor = mod.isEnabled ? .systemGreen : .systemGray
         }
         return cell
-    }
-
-    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true)
     }
 }
 

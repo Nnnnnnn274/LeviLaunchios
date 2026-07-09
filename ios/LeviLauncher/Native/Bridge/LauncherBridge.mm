@@ -74,6 +74,22 @@ static bool g_preloaderInitialized = false;
     return YES;
 }
 
++ (int)fpsValue {
+    return FpsMod::getFps();
+}
+
++ (BOOL)isZoomEnabled {
+    return ZoomMod::isEnabled() ? YES : NO;
+}
+
++ (BOOL)isFpsCounterEnabled {
+    return FpsMod::isEnabled() ? YES : NO;
+}
+
++ (BOOL)isSnaplookEnabled {
+    return SnaplookMod::isEnabled() ? YES : NO;
+}
+
 + (int)modCount {
     return (int)Preloader::getModCount();
 }
