@@ -50,11 +50,16 @@ static void levi_signal_handler(int sig) {
     write(STDERR_FILENO, "[LeviLauncher] CRASH: signal ", 28);
     write(STDERR_FILENO, name, 10);
     write(STDERR_FILENO, "\n", 1);
+    // Restore default and re-raise so ReportCrash generates a .ips
+    signal(sig, SIG_DFL);
+    raise(sig);
 }
 
 static void levi_exception_handler(NSException *exception) {
     levi_log(@"CRASH: uncaught ObjC exception: %@\n%@",
            exception.reason, exception.callStackSymbols);
+    // abort() triggers SIGABRT → levi_signal_handler → re-raise → .ips
+    abort();
 }
 
 #pragma mark - Initialization
