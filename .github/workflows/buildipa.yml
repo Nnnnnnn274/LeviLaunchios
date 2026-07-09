@@ -121,24 +121,19 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           TAG="v${VERSION}-build-${{ github.run_number }}"
-          git archive --format=zip --output="/tmp/LeviLauncher-${VERSION}.zip" HEAD
           cat > /tmp/release-notes.md <<-EOF
           ## LeviLauncher iOS ${VERSION}
 
-          Source code for LeviLauncher iOS — inject into Minecraft: Bedrock Edition.
-
-          **Build:**
+          **Usage:**
           \`\`\`
-          cd ios
-          xcodegen generate --spec project.yml
-          xcodebuild -project LeviLauncher.xcodeproj -scheme LeviLauncher -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO build
-          # Output in DerivedData/Build/Products/Release-iphoneos/LeviLauncher.framework/LeviLauncher
+          azule -i Minecraft.ipa -o out.ipa -f LeviLauncher.dylib
+          # Sideload out.ipa via SideStore
           \`\`\`
 
-          **Requirements:** macOS + Xcode, decrypted Minecraft IPA, IPA injector (e.g. Azule), SideStore.
+          **Requirements:** Decrypted Minecraft IPA, IPA injector (e.g. Azule), SideStore.
           EOF
           gh release create "$TAG" \
-            "/tmp/LeviLauncher-${VERSION}.zip" \
+            "dist/LeviLauncher-${VERSION}-ios.zip" \
             --title "LeviLauncher iOS ${VERSION} (build ${{ github.run_number }})" \
             --notes-file /tmp/release-notes.md
 
