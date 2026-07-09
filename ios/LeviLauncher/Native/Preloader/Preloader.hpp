@@ -15,10 +15,16 @@ namespace Preloader {
         bool (*hookCFunction)(const char *symbolName, void *replacement, void **original);
         bool (*hookObjCMethod)(const char *className, const char *selectorName,
                                void *replacement, void **original);
+        bool (*hookInline)(void *target, void *hook, void **original);
         bool (*isInGame)();
         void (*onFrame)(void (*callback)(double));
         void (*onTouch)(void (*callback)(int, double, double));
         const char *(*minecraftVersion)();
+        bool (*textureInitialize)();
+        void (*textureOnLoad)(bool (*callback)(const char *path, bool preferBgra, void *imageData));
+        void (*renderOnBeforeFrame)(void (*callback)());
+        void (*renderOnFrame)(void (*callback)(double));
+        void (*uiOnViewDidLoad)(void (*callback)(void *viewController, void *view));
     };
 
     // ── Mod info ────────────────────────────────────────────

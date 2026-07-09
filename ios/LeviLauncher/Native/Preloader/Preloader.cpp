@@ -2,6 +2,10 @@
 #include "Fishhook.hpp"
 #include "Hooks.h"
 #include "MinecraftAPI.hpp"
+#include "Native/Hooks/InlineHook.h"
+#include "Native/Hooks/TextureHook.h"
+#include "Native/Hooks/RenderHook.h"
+#include "Native/Hooks/UIHook.h"
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <dlfcn.h>
@@ -63,6 +67,9 @@ namespace Preloader {
         s_majorVersion = MinecraftAPI::detectVersion(s_minecraftVersion);
 
         Hooks_Initialize();
+        RenderHook::initialize();
+        UIHook::initialize();
+        TextureHook::initialize();
 
         s_initialized = true;
         return true;
@@ -148,6 +155,9 @@ namespace Preloader {
                                           void *repl, void **orig) -> bool {
                 return hookObjCMethod(clsName, selName, repl, orig);
             };
+            g_modAPI.hookInline = [](void *target, void *hook, void **original) -> bool {
+                return InlineHook::install(target, hook, original);
+            };
             g_modAPI.isInGame = Hooks_IsInGame;
             g_modAPI.minecraftVersion = []() -> const char * {
                 return s_minecraftVersion.c_str();
@@ -157,6 +167,25 @@ namespace Preloader {
             };
             g_modAPI.onTouch = [](void (*cb)(int, double, double)) {
                 Hooks_AddTouchCallback(TouchCallback(cb));
+            };
+            g_modAPI.textureInitialize = []() -> bool {
+                return TextureHook::initialize();
+            };
+            g_modAPI.textureOnLoad = [](bool (*cb)(const char *, bool, void *)) {
+                TextureHook::onTextureLoad(
+                    [cb](const std::string &path, bool bg, TextureHook::ImageData &img) -> bool {
+                        return cb(path.c_str(), bg, (void *)&img);
+                    }
+                );
+            };
+            g_modAPI.renderOnBeforeFrame = [](void (*cb)()) {
+                RenderHook::onBeforeFrame(RenderHook::DrawCallback(cb));
+            };
+            g_modAPI.renderOnFrame = [](void (*cb)(double)) {
+                RenderHook::onFrame(RenderHook::FrameCallback(cb));
+            };
+            g_modAPI.uiOnViewDidLoad = [](void (*cb)(void *, void *)) {
+                UIHook::onViewDidLoad(UIHook::ViewDidLoadCallback(cb));
             };
         }
         return &g_modAPI;
