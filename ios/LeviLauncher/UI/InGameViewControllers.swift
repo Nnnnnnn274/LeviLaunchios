@@ -1,6 +1,57 @@
 import UIKit
 import AuthenticationServices
 
+// MARK: - Minecraft-style helpers
+private func mcLabel(_ text: String, size: CGFloat = 15) -> UILabel {
+    let l = UILabel()
+    l.translatesAutoresizingMaskIntoConstraints = false
+    l.text = text
+    l.font = UIFont(name: "Menlo-Bold", size: size) ?? .boldSystemFont(ofSize: size)
+    l.textColor = UIColor(red: 0.85, green: 0.85, blue: 0.85, alpha: 1)
+    l.shadowColor = UIColor(white: 0, alpha: 0.6)
+    l.shadowOffset = CGSize(width: 1, height: 1)
+    return l
+}
+
+private let mcBg = UIColor(red: 0.2, green: 0.16, blue: 0.13, alpha: 1)
+private let mcCellBg = UIColor(red: 0.3, green: 0.26, blue: 0.22, alpha: 1)
+private let mcBorder = UIColor(red: 0.08, green: 0.06, blue: 0.05, alpha: 1)
+
+private func mcCell(text: String, icon: String, tag: Int) -> UITableViewCell {
+    let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+    cell.backgroundColor = mcCellBg
+    cell.contentView.backgroundColor = .clear
+    cell.textLabel?.text = text
+    cell.textLabel?.textColor = UIColor(red: 0.9, green: 0.9, blue: 0.9, alpha: 1)
+    cell.textLabel?.font = UIFont(name: "Menlo-Bold", size: 13) ?? .boldSystemFont(ofSize: 13)
+    cell.textLabel?.shadowColor = UIColor(white: 0, alpha: 0.5)
+    cell.textLabel?.shadowOffset = CGSize(width: 1, height: 1)
+    cell.imageView?.image = UIImage(systemName: icon)
+    cell.imageView?.tintColor = UIColor(red: 0.7, green: 0.7, blue: 0.72, alpha: 1)
+    cell.accessoryType = .disclosureIndicator
+    cell.tag = tag
+    // Stone button border
+    cell.contentView.layer.borderWidth = 2
+    cell.contentView.layer.borderColor = mcBorder.cgColor
+    cell.contentView.layer.cornerRadius = 2
+    return cell
+}
+
+private func styleNav(_ vc: UIViewController) {
+    guard let nav = vc.navigationController else { return }
+    nav.navigationBar.isTranslucent = false
+    nav.navigationBar.barTintColor = UIColor(red: 0.15, green: 0.12, blue: 0.09, alpha: 1)
+    nav.navigationBar.titleTextAttributes = [
+        .font: UIFont(name: "Menlo-Bold", size: 16) ?? .boldSystemFont(ofSize: 16),
+        .foregroundColor: UIColor(red: 0.85, green: 0.85, blue: 0.85, alpha: 1),
+    ]
+    vc.navigationItem.leftBarButtonItem = UIBarButtonItem(
+        image: UIImage(systemName: "xmark"),
+        style: .done, target: vc, action: #selector(UIViewController.dismissSelfNav)
+    )
+    vc.navigationItem.leftBarButtonItem?.tintColor = UIColor(red: 0.85, green: 0.85, blue: 0.85, alpha: 1)
+}
+
 // MARK: - In-Game Account Management
 
 class InGameAccountViewController: UITableViewController, ASWebAuthenticationSessionPresentationContextProviding {
@@ -14,30 +65,21 @@ class InGameAccountViewController: UITableViewController, ASWebAuthenticationSes
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Accounts"
-        navigationItem.leftBarButtonItem = UIBarButtonItem(
-            image: UIImage(systemName: "xmark"),
-            style: .done,
-            target: self,
-            action: #selector(dismissSelf)
-        )
+        styleNav(self)
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             image: UIImage(systemName: "plus"),
-            style: .plain,
-            target: self,
-            action: #selector(addAccount)
+            style: .plain, target: self, action: #selector(addAccount)
         )
+        navigationItem.rightBarButtonItem?.tintColor = UIColor(red: 0.5, green: 0.8, blue: 0.5, alpha: 1)
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
-        tableView.backgroundColor = UIColor(white: 0.1, alpha: 1)
+        tableView.backgroundColor = mcBg
+        tableView.separatorColor = mcBorder
         loadAccounts()
     }
 
     private func loadAccounts() {
         accounts = MsftAccountStore.list()
         tableView.reloadData()
-    }
-
-    @objc private func dismissSelf() {
-        dismiss(animated: true)
     }
 
     @objc private func addAccount() {
@@ -54,17 +96,21 @@ class InGameAccountViewController: UITableViewController, ASWebAuthenticationSes
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
-        cell.backgroundColor = UIColor(white: 0.15, alpha: 0.9)
-        cell.textLabel?.textColor = .white
-        cell.imageView?.tintColor = .systemGreen
+        cell.backgroundColor = mcCellBg
+        cell.textLabel?.textColor = UIColor(red: 0.9, green: 0.9, blue: 0.9, alpha: 1)
+        cell.textLabel?.font = UIFont(name: "Menlo-Bold", size: 13) ?? .boldSystemFont(ofSize: 13)
+        cell.textLabel?.shadowColor = UIColor(white: 0, alpha: 0.5)
+        cell.textLabel?.shadowOffset = CGSize(width: 1, height: 1)
 
         if accounts.isEmpty {
-            cell.textLabel?.text = "No accounts - tap + to add"
+            cell.textLabel?.text = "No accounts — tap + to add"
             cell.imageView?.image = UIImage(systemName: "person.slash")
+            cell.imageView?.tintColor = .systemGray
         } else {
             let account = accounts[indexPath.row]
             cell.textLabel?.text = account.xboxGamertag ?? account.msUserId
             cell.imageView?.image = UIImage(systemName: account.isActive ? "person.circle.fill" : "person.circle")
+            cell.imageView?.tintColor = account.isActive ? .systemGreen : .systemGray
             cell.accessoryType = account.isActive ? .checkmark : .none
         }
         return cell
@@ -85,12 +131,15 @@ class InGameModListViewController: UITableViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Mods"
-        navigationItem.leftBarButtonItem = UIBarButtonItem(
-            image: UIImage(systemName: "xmark"),
-            style: .done, target: self, action: #selector(dismissSelf)
+        styleNav(self)
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "plus"),
+            style: .plain, target: self, action: #selector(addMod)
         )
+        navigationItem.rightBarButtonItem?.tintColor = UIColor(red: 0.5, green: 0.8, blue: 0.5, alpha: 1)
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
-        tableView.backgroundColor = UIColor(white: 0.1, alpha: 1)
+        tableView.backgroundColor = mcBg
+        tableView.separatorColor = mcBorder
         loadMods()
     }
 
@@ -106,9 +155,7 @@ class InGameModListViewController: UITableViewController {
         tableView.reloadData()
     }
 
-    @objc private func dismissSelf() {
-        dismiss(animated: true)
-    }
+    @objc private func addMod() {}
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         max(mods.count, 1)
@@ -116,13 +163,16 @@ class InGameModListViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
-        cell.backgroundColor = UIColor(white: 0.15, alpha: 0.9)
-        cell.textLabel?.textColor = .white
-        cell.imageView?.tintColor = .systemPurple
+        cell.backgroundColor = mcCellBg
+        cell.textLabel?.textColor = UIColor(red: 0.9, green: 0.9, blue: 0.9, alpha: 1)
+        cell.textLabel?.font = UIFont(name: "Menlo-Bold", size: 13) ?? .boldSystemFont(ofSize: 13)
+        cell.textLabel?.shadowColor = UIColor(white: 0, alpha: 0.5)
+        cell.textLabel?.shadowOffset = CGSize(width: 1, height: 1)
 
         if mods.isEmpty {
             cell.textLabel?.text = "No mods installed"
             cell.imageView?.image = UIImage(systemName: "wrench.and.screwdriver")
+            cell.imageView?.tintColor = .systemGray
         } else {
             let mod = mods[indexPath.row]
             cell.textLabel?.text = mod.displayName
@@ -154,25 +204,23 @@ class InGameContentViewController: UITableViewController {
         super.viewDidLoad()
         let titles = ["Worlds", "Resource Packs", "Servers", "Screenshots"]
         title = titles[safe: contentType] ?? "Content"
-        navigationItem.leftBarButtonItem = UIBarButtonItem(
-            image: UIImage(systemName: "xmark"),
-            style: .done, target: self, action: #selector(dismissSelf)
-        )
+        styleNav(self)
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
-        tableView.backgroundColor = UIColor(white: 0.1, alpha: 1)
+        tableView.backgroundColor = mcBg
+        tableView.separatorColor = mcBorder
         loadContent()
     }
 
     private func loadContent() {
         let gameDir = LauncherStorage.sharedDataRoot.appendingPathComponent("games/com.mojang")
         switch contentType {
-        case 0: // Worlds
+        case 0:
             let worldsDir = gameDir.appendingPathComponent("minecraftWorlds")
             items = WorldManager.shared.listWorlds(in: worldsDir)
-        case 1: // Resource Packs
+        case 1:
             let packsDir = gameDir.appendingPathComponent("resource_packs")
             items = ResourcePackManager.shared.listPacks(in: packsDir)
-        case 3: // Screenshots
+        case 3:
             let shotsDir = gameDir.appendingPathComponent("screenshots")
             items = ScreenshotManager.shared.listScreenshots(in: shotsDir).map {
                 ContentItem(name: $0.file.lastPathComponent, file: $0.file)
@@ -183,18 +231,17 @@ class InGameContentViewController: UITableViewController {
         tableView.reloadData()
     }
 
-    @objc private func dismissSelf() {
-        dismiss(animated: true)
-    }
-
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         max(items.count, 1)
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
-        cell.backgroundColor = UIColor(white: 0.15, alpha: 0.9)
-        cell.textLabel?.textColor = .white
+        cell.backgroundColor = mcCellBg
+        cell.textLabel?.textColor = UIColor(red: 0.9, green: 0.9, blue: 0.9, alpha: 1)
+        cell.textLabel?.font = UIFont(name: "Menlo-Bold", size: 13) ?? .boldSystemFont(ofSize: 13)
+        cell.textLabel?.shadowColor = UIColor(white: 0, alpha: 0.5)
+        cell.textLabel?.shadowOffset = CGSize(width: 1, height: 1)
 
         if items.isEmpty {
             cell.textLabel?.text = "No \(title ?? "content") found"
@@ -203,6 +250,7 @@ class InGameContentViewController: UITableViewController {
             let item = items[indexPath.row]
             cell.textLabel?.text = item.name
             cell.detailTextLabel?.text = item.formattedSize
+            cell.detailTextLabel?.textColor = UIColor(red: 0.6, green: 0.6, blue: 0.6, alpha: 1)
         }
         return cell
     }
@@ -214,25 +262,23 @@ class InGameSettingsViewController: UITableViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Settings"
-        navigationItem.leftBarButtonItem = UIBarButtonItem(
-            image: UIImage(systemName: "xmark"),
-            style: .done, target: self, action: #selector(dismissSelf)
-        )
+        styleNav(self)
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
-        tableView.backgroundColor = UIColor(white: 0.1, alpha: 1)
-    }
-
-    @objc private func dismissSelf() {
-        dismiss(animated: true)
+        tableView.backgroundColor = mcBg
+        tableView.separatorColor = mcBorder
     }
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { 4 }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = UITableViewCell(style: .value1, reuseIdentifier: "cell")
-        cell.backgroundColor = UIColor(white: 0.15, alpha: 0.9)
-        cell.textLabel?.textColor = .white
-        cell.detailTextLabel?.textColor = .gray
+        let cell = UITableViewCell(style: .value1, reuseIdentifier: nil)
+        cell.backgroundColor = mcCellBg
+        cell.textLabel?.textColor = UIColor(red: 0.9, green: 0.9, blue: 0.9, alpha: 1)
+        cell.textLabel?.font = UIFont(name: "Menlo-Bold", size: 13) ?? .boldSystemFont(ofSize: 13)
+        cell.textLabel?.shadowColor = UIColor(white: 0, alpha: 0.5)
+        cell.textLabel?.shadowOffset = CGSize(width: 1, height: 1)
+        cell.detailTextLabel?.textColor = UIColor(red: 0.6, green: 0.6, blue: 0.6, alpha: 1)
+        cell.detailTextLabel?.font = UIFont(name: "Menlo", size: 12) ?? .systemFont(ofSize: 12)
 
         switch indexPath.row {
         case 0:
@@ -244,7 +290,7 @@ class InGameSettingsViewController: UITableViewController {
         case 2:
             cell.textLabel?.text = "Mod Injection"
             cell.detailTextLabel?.text = "Active"
-            cell.detailTextLabel?.textColor = .systemGreen
+            cell.detailTextLabel?.textColor = UIColor(red: 0.3, green: 0.8, blue: 0.3, alpha: 1)
         case 3:
             cell.textLabel?.text = "iOS Version"
             cell.detailTextLabel?.text = UIDevice.current.systemVersion
@@ -255,8 +301,14 @@ class InGameSettingsViewController: UITableViewController {
     }
 }
 
-// MARK: - Safe Array Access
+// MARK: - Dismiss helper
+extension UIViewController {
+    @objc func dismissSelfNav() {
+        dismiss(animated: true)
+    }
+}
 
+// MARK: - Safe Array Access
 extension Array {
     subscript(safe index: Int) -> Element? {
         guard index >= 0 && index < count else { return nil }
