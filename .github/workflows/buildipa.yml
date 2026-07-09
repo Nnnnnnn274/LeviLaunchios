@@ -25,6 +25,8 @@ jobs:
   build-dylib:
     name: Build LeviLauncher.dylib
     runs-on: macos-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
