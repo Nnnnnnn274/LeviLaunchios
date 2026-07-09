@@ -89,10 +89,35 @@ import UIKit
     }
 
     @objc private func showMenu() {
-        guard let gameVC = gameViewController else { return }
+        NSLog("[LeviLauncher] showMenu called")
+        guard let gameVC = gameViewController else {
+            NSLog("[LeviLauncher] gameVC is nil, trying fallback")
+            if LauncherBridge.injectOverlayNow() {
+                NSLog("[LeviLauncher] fallback injection succeeded, re-trying showMenu in 0.5s")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    self?.showMenu()
+                }
+            }
+            return
+        }
+        // Dismiss any already-presented VC first
+        if gameVC.presentedViewController != nil {
+            NSLog("[LeviLauncher] dismissing existing presented VC")
+            gameVC.dismiss(animated: false)
+        }
+        // Find the topmost presented VC to present from
+        var topVC: UIViewController = gameVC
+        while let presented = topVC.presentedViewController {
+            topVC = presented
+        }
+        if topVC != gameVC {
+            NSLog("[LeviLauncher] presenting from topmost VC instead of gameVC")
+        }
         let menuVC = ModMenuViewController()
         menuVC.modalPresentationStyle = .overFullScreen
-        gameVC.present(menuVC, animated: true)
+        NSLog("[LeviLauncher] about to present ModMenuViewController")
+        topVC.present(menuVC, animated: true)
+        NSLog("[LeviLauncher] present returned")
     }
 
     @objc private func handleButtonPan(_ gesture: UIPanGestureRecognizer) {

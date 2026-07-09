@@ -34,6 +34,29 @@ static void levi_log(NSString *msg, ...) {
     } @catch (NSException *) {}
 }
 
+#pragma mark - Crash handlers
+
+#import <signal.h>
+#import <unistd.h>
+
+static void levi_signal_handler(int sig) {
+    const char *name = "?";
+    switch (sig) {
+        case SIGABRT: name = "SIGABRT"; break;
+        case SIGSEGV: name = "SIGSEGV"; break;
+        case SIGBUS:  name = "SIGBUS";  break;
+        case SIGILL:  name = "SIGILL";  break;
+    }
+    write(STDERR_FILENO, "[LeviLauncher] CRASH: signal ", 28);
+    write(STDERR_FILENO, name, 10);
+    write(STDERR_FILENO, "\n", 1);
+}
+
+static void levi_exception_handler(NSException *exception) {
+    levi_log(@"CRASH: uncaught ObjC exception: %@\n%@",
+           exception.reason, exception.callStackSymbols);
+}
+
 #pragma mark - Initialization
 
 static void try_init(int retry) {
@@ -93,6 +116,13 @@ void LeviLauncherInit(void) {
 
 __attribute__((constructor))
 static void levi_launcher_init(void) {
+    // Install crash handlers immediately (before any other code)
+    NSSetUncaughtExceptionHandler(&levi_exception_handler);
+    signal(SIGABRT, levi_signal_handler);
+    signal(SIGSEGV, levi_signal_handler);
+    signal(SIGBUS, levi_signal_handler);
+    signal(SIGILL, levi_signal_handler);
+
     @autoreleasepool {
         levi_log(@"Constructor running");
         // Schedule on main run loop (more reliable at load time than dispatch_async)
