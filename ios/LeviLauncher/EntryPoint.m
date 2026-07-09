@@ -32,7 +32,8 @@ static void try_init(void) {
     }
 
     // Register observer and trigger init
-    id entry = [NSClassFromString(@"LauncherEntry") shared];
+    Class entryClass = NSClassFromString(@"LauncherEntry");
+    id entry = [entryClass shared];
     [entry initialize];
     [[NSNotificationCenter defaultCenter]
      postNotificationName:@"LeviLauncherInitializationNotification"
@@ -43,7 +44,8 @@ static void try_init(void) {
 __attribute__((visibility("default")))
 void LeviLauncherInit(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        id entry = [NSClassFromString(@"LauncherEntry") shared];
+        Class entryClass = NSClassFromString(@"LauncherEntry");
+        id entry = [entryClass shared];
         [entry initialize];
         [[NSNotificationCenter defaultCenter]
          postNotificationName:@"LeviLauncherInitializationNotification"
