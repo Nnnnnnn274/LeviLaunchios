@@ -46,6 +46,7 @@ targets:
     preBuildScripts:
       - name: "Create Config Files"
         script: |
+          mkdir -p "$SRCROOT/LeviLauncher/Resources"
           if [ ! -f "$SRCROOT/LeviLauncher/Resources/CurseForge.plist" ]; then
             cat > "$SRCROOT/LeviLauncher/Resources/CurseForge.plist" << EOF
           <?xml version="1.0" encoding="UTF-8"?>
