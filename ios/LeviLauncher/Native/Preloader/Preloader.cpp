@@ -2,13 +2,13 @@
 #include "Fishhook.hpp"
 #include "Hooks.h"
 #include "MinecraftAPI.hpp"
-#include "Native/Hooks/InlineHook.h"
-#include "Native/Hooks/TextureHook.h"
-#include "Native/Hooks/RenderHook.h"
-#include "Native/Hooks/UIHook.h"
-#include "Native/Hooks/ContentRegistry.h"
-#include "Native/Hooks/DimensionAPI.h"
-#include "Native/Hooks/BlockItemAPI.h"
+#include "../Hooks/InlineHook.h"
+#include "../Hooks/TextureHook.h"
+#include "../Hooks/RenderHook.h"
+#include "../Hooks/UIHook.h"
+#include "../Hooks/ContentRegistry.h"
+#include "../Hooks/DimensionAPI.h"
+#include "../Hooks/BlockItemAPI.h"
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <dlfcn.h>
