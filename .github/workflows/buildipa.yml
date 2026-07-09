@@ -61,6 +61,7 @@ jobs:
                      -scheme "$SCHEME" \
                      -configuration "$CONFIGURATION" \
                      -sdk "$SDK" \
+                     BUILD_DIR="$PWD/build" \
                      CODE_SIGNING_ALLOWED=NO \
                      CLANG_ENABLE_MODULE_DEBUGGING=NO \
                      COMPILER_INDEX_STORE_ENABLE=NO \
@@ -69,13 +70,10 @@ jobs:
       - name: Locate Built Dylib
         id: dylib
         run: |
-          DYLIB=$(find ~/Library/Developer/Xcode/DerivedData \
-                    -name "LeviLauncher" \
-                    -path "*/$CONFIGURATION-iphoneos/*" \
-                    -type f | head -1)
+          DYLIB=$(find "$PROJECT_DIR/build" -type f -name "LeviLauncher" | head -1)
           if [ -z "$DYLIB" ]; then
             echo "ERROR: Could not find built dylib"
-            find ~/Library/Developer/Xcode/DerivedData -name "LeviLauncher*" 2>/dev/null
+            find "$PROJECT_DIR/build" -type f 2>/dev/null
             exit 1
           fi
           echo "dylib-path=$DYLIB" >> "$GITHUB_OUTPUT"
