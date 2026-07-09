@@ -5,7 +5,8 @@ import UIKit
     @objc public static let shared = LauncherEntry()
 
     private var isInitialized = false
-    private var overlayWindow: UIWindow?
+    private var floatingButton: UIButton?
+    private weak var gameViewController: UIViewController?
 
     private override init() {}
 
@@ -15,7 +16,7 @@ import UIKit
 
         DispatchQueue.main.async {
             self.initPreloader()
-            self.setupOverlay()
+            self.registerUIHook()
             self.loadAccounts()
         }
     }
@@ -31,17 +32,56 @@ import UIKit
         }
     }
 
-    private func setupOverlay() {
-        guard let windowScene = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene }).first else { return }
+    private func registerUIHook() {
+        LauncherBridge.onViewDidLoad { [weak self] (vcPtr, viewPtr) in
+            guard let self = self else { return }
+            let gameView = Unmanaged<UIView>.fromOpaque(viewPtr).takeUnretainedValue()
+            let gameVC = Unmanaged<UIViewController>.fromOpaque(vcPtr).takeUnretainedValue()
+            self.gameViewController = gameVC
 
-        let overlayVC = ModMenuViewController()
-        overlayVC.modalPresentationStyle = .overFullScreen
+            let button = UIButton(type: .custom)
+            let config = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
+            button.setImage(UIImage(systemName: "leaf.fill", withConfiguration: config), for: .normal)
+            button.tintColor = .systemGreen
+            button.backgroundColor = UIColor(white: 0.1, alpha: 0.8)
+            button.layer.cornerRadius = 28
+            button.layer.masksToBounds = true
+            button.layer.borderWidth = 2
+            button.layer.borderColor = UIColor.systemGreen.cgColor
+            button.translatesAutoresizingMaskIntoConstraints = false
 
-        overlayWindow = UIWindow(windowScene: windowScene)
-        overlayWindow?.rootViewController = overlayVC
-        overlayWindow?.windowLevel = .alert + 100
-        overlayWindow?.isHidden = false
+            let pan = UIPanGestureRecognizer(target: self, action: #selector(handleButtonPan(_:)))
+            button.addGestureRecognizer(pan)
+            button.addTarget(self, action: #selector(showMenu), for: .touchUpInside)
+
+            gameView.addSubview(button)
+
+            NSLayoutConstraint.activate([
+                button.trailingAnchor.constraint(equalTo: gameView.safeAreaLayoutGuide.trailingAnchor, constant: -16),
+                button.topAnchor.constraint(equalTo: gameView.safeAreaLayoutGuide.topAnchor, constant: 60),
+                button.widthAnchor.constraint(equalToConstant: 56),
+                button.heightAnchor.constraint(equalToConstant: 56)
+            ])
+
+            self.floatingButton = button
+        }
+    }
+
+    @objc private func showMenu() {
+        guard let gameVC = gameViewController else { return }
+        let menuVC = ModMenuViewController()
+        menuVC.modalPresentationStyle = .overFullScreen
+        gameVC.present(menuVC, animated: true)
+    }
+
+    @objc private func handleButtonPan(_ gesture: UIPanGestureRecognizer) {
+        guard let button = floatingButton else { return }
+        let translation = gesture.translation(in: button.superview)
+        button.center = CGPoint(
+            x: button.center.x + translation.x,
+            y: button.center.y + translation.y
+        )
+        gesture.setTranslation(.zero, in: button.superview)
     }
 
     private func loadAccounts() {

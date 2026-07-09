@@ -32,6 +32,7 @@ typedef void (^LauncherTouchCallback)(int phase, double x, double y);
 // Callbacks
 + (void)onFrame:(LauncherFrameCallback)callback;
 + (void)onTouch:(LauncherTouchCallback)callback;
++ (void)onViewDidLoad:(void (^)(void *viewController, void *view))callback;
 
 // Symbol resolution (for advanced usage)
 + (void * _Nullable)resolveSymbol:(NSString *)symbolName;

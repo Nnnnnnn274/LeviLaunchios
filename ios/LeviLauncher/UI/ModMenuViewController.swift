@@ -1,63 +1,14 @@
 import UIKit
 
 class ModMenuViewController: UIViewController {
-    private var mainView: UIView?
-    private var menuButton: UIButton?
-    private var isMenuVisible = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.isUserInteractionEnabled = true
-        setupMenuButton()
-        setupGestureRecognizers()
+        view.backgroundColor = UIColor(white: 0.0, alpha: 0.4)
+        setupMenuView()
     }
 
-    private func setupMenuButton() {
-        let button = UIButton(type: .custom)
-        let config = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
-        button.setImage(UIImage(systemName: "leaf.fill", withConfiguration: config), for: .normal)
-        button.tintColor = .systemGreen
-        button.backgroundColor = UIColor(white: 0.1, alpha: 0.8)
-        button.layer.cornerRadius = 28
-        button.layer.masksToBounds = true
-        button.layer.borderWidth = 2
-        button.layer.borderColor = UIColor.systemGreen.cgColor
-
-        button.frame = CGRect(x: UIScreen.main.bounds.width - 80,
-                               y: 100, width: 56, height: 56)
-        button.autoresizingMask = [.flexibleLeftMargin, .flexibleBottomMargin]
-
-        button.addTarget(self, action: #selector(toggleMenu), for: .touchUpInside)
-
-        view.addSubview(button)
-        menuButton = button
-    }
-
-    private func setupGestureRecognizers() {
-        let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
-        menuButton?.addGestureRecognizer(pan)
-    }
-
-    @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {
-        guard let button = menuButton else { return }
-        let translation = gesture.translation(in: view)
-        button.center = CGPoint(
-            x: button.center.x + translation.x,
-            y: button.center.y + translation.y
-        )
-        gesture.setTranslation(.zero, in: view)
-    }
-
-    @objc private func toggleMenu() {
-        isMenuVisible.toggle()
-        if isMenuVisible {
-            showModMenu()
-        } else {
-            hideModMenu()
-        }
-    }
-
-    private func showModMenu() {
+    private func setupMenuView() {
         let menuView = ModMenuView(frame: CGRect(x: 20, y: 60,
                                                    width: view.bounds.width - 40,
                                                    height: view.bounds.height - 120))
@@ -65,26 +16,21 @@ class ModMenuViewController: UIViewController {
         menuView.layer.cornerRadius = 16
         menuView.layer.masksToBounds = true
         menuView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        menuView.tag = 999
         menuView.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
         menuView.alpha = 0
         view.addSubview(menuView)
+
+        let tap = UITapGestureRecognizer(target: self, action: #selector(dismissSelf))
+        view.addGestureRecognizer(tap)
 
         UIView.animate(withDuration: 0.2) {
             menuView.transform = .identity
             menuView.alpha = 1
         }
-        mainView = menuView
     }
 
-    private func hideModMenu() {
-        UIView.animate(withDuration: 0.2, animations: {
-            self.mainView?.alpha = 0
-            self.mainView?.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
-        }) { _ in
-            self.mainView?.removeFromSuperview()
-            self.mainView = nil
-        }
+    @objc private func dismissSelf() {
+        dismiss(animated: true)
     }
 }
 
@@ -148,9 +94,18 @@ class ModMenuView: UIView {
         ])
     }
 
+    private var parentViewController: UIViewController? {
+        var responder: UIResponder? = self
+        while let next = responder?.next {
+            if let vc = next as? UIViewController { return vc }
+            responder = next
+        }
+        return nil
+    }
+
     private func presentViewController(_ vc: UIViewController) {
-        guard let rootVC = window?.rootViewController else { return }
-        rootVC.present(vc, animated: true)
+        guard let parent = parentViewController else { return }
+        parent.present(vc, animated: true)
     }
 }
 

@@ -4,6 +4,7 @@
 #import <Foundation/Foundation.h>
 
 #include "../Preloader/Preloader.hpp"
+#include "../Hooks/UIHook.h"
 #include "../InbuiltMods/ZoomMod.hpp"
 #include "../InbuiltMods/FpsMod.hpp"
 #include "../InbuiltMods/SnaplookMod.hpp"
@@ -98,6 +99,12 @@ static bool g_preloaderInitialized = false;
 + (void)onTouch:(LauncherTouchCallback)callback {
     Preloader::onTouch([callback](int phase, double x, double y) {
         callback(phase, x, y);
+    });
+}
+
++ (void)onViewDidLoad:(void (^)(void *viewController, void *view))callback {
+    UIHook::onViewDidLoad([callback](void *vc, void *v) {
+        callback(vc, v);
     });
 }
 
