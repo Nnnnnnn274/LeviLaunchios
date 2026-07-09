@@ -34,6 +34,9 @@ typedef void (^LauncherTouchCallback)(int phase, double x, double y);
 + (void)onTouch:(LauncherTouchCallback)callback;
 + (void)onViewDidLoad:(void (^)(void *viewController, void *view))callback;
 
+// Fallback: walk the window hierarchy looking for the game VC
++ (BOOL)injectOverlayNow; // returns YES if a game VC was found
+
 // Symbol resolution (for advanced usage)
 + (void * _Nullable)resolveSymbol:(NSString *)symbolName;
 

@@ -108,6 +108,16 @@ static bool g_preloaderInitialized = false;
     });
 }
 
++ (BOOL)injectOverlayNow {
+    void *vc = UIHook::findGameViewController();
+    if (!vc) return NO;
+    id viewController = (__bridge id)vc;
+    UIView *view = [viewController view];
+    if (!view) return NO;
+    UIHook::injectOverlayNow((__bridge void *)viewController, (__bridge void *)view);
+    return YES;
+}
+
 + (void *)resolveSymbol:(NSString *)symbolName {
     return Preloader::resolveSymbol([symbolName UTF8String]);
 }

@@ -33,38 +33,59 @@ import UIKit
     }
 
     private func registerUIHook() {
+        // Register the viewDidLoad hook callback
         LauncherBridge.onViewDidLoad { [weak self] (vcPtr, viewPtr) in
             guard let self = self else { return }
-            let gameView = Unmanaged<UIView>.fromOpaque(viewPtr).takeUnretainedValue()
-            let gameVC = Unmanaged<UIViewController>.fromOpaque(vcPtr).takeUnretainedValue()
-            self.gameViewController = gameVC
-
-            let button = UIButton(type: .custom)
-            let config = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
-            button.setImage(UIImage(systemName: "leaf.fill", withConfiguration: config), for: .normal)
-            button.tintColor = .systemGreen
-            button.backgroundColor = UIColor(white: 0.1, alpha: 0.8)
-            button.layer.cornerRadius = 28
-            button.layer.masksToBounds = true
-            button.layer.borderWidth = 2
-            button.layer.borderColor = UIColor.systemGreen.cgColor
-            button.translatesAutoresizingMaskIntoConstraints = false
-
-            let pan = UIPanGestureRecognizer(target: self, action: #selector(handleButtonPan(_:)))
-            button.addGestureRecognizer(pan)
-            button.addTarget(self, action: #selector(showMenu), for: .touchUpInside)
-
-            gameView.addSubview(button)
-
-            NSLayoutConstraint.activate([
-                button.trailingAnchor.constraint(equalTo: gameView.safeAreaLayoutGuide.trailingAnchor, constant: -16),
-                button.topAnchor.constraint(equalTo: gameView.safeAreaLayoutGuide.topAnchor, constant: 60),
-                button.widthAnchor.constraint(equalToConstant: 56),
-                button.heightAnchor.constraint(equalToConstant: 56)
-            ])
-
-            self.floatingButton = button
+            self.addFloatingButton(vcPtr: vcPtr, viewPtr: viewPtr)
         }
+
+        // Periodic fallback scan: try to find the game VC every 2s for 30s
+        scanForGameVC(attempts: 0)
+    }
+
+    private func scanForGameVC(attempts: Int) {
+        guard floatingButton == nil else { return }
+        if attempts >= 15 { return } // stop after ~30s
+
+        if LauncherBridge.injectOverlayNow() {
+            NSLog("[LeviLauncher] Fallback overlay injection succeeded (attempt \(attempts))")
+        } else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                self?.scanForGameVC(attempts: attempts + 1)
+            }
+        }
+    }
+
+    private func addFloatingButton(vcPtr: UnsafeMutableRawPointer, viewPtr: UnsafeMutableRawPointer) {
+        let gameView = Unmanaged<UIView>.fromOpaque(viewPtr).takeUnretainedValue()
+        let gameVC = Unmanaged<UIViewController>.fromOpaque(vcPtr).takeUnretainedValue()
+        self.gameViewController = gameVC
+
+        let button = UIButton(type: .custom)
+        let config = UIImage.SymbolConfiguration(pointSize: 24, weight: .bold)
+        button.setImage(UIImage(systemName: "leaf.fill", withConfiguration: config), for: .normal)
+        button.tintColor = .systemGreen
+        button.backgroundColor = UIColor(white: 0.1, alpha: 0.8)
+        button.layer.cornerRadius = 28
+        button.layer.masksToBounds = true
+        button.layer.borderWidth = 2
+        button.layer.borderColor = UIColor.systemGreen.cgColor
+        button.translatesAutoresizingMaskIntoConstraints = false
+
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(handleButtonPan(_:)))
+        button.addGestureRecognizer(pan)
+        button.addTarget(self, action: #selector(showMenu), for: .touchUpInside)
+
+        gameView.addSubview(button)
+
+        NSLayoutConstraint.activate([
+            button.trailingAnchor.constraint(equalTo: gameView.safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            button.topAnchor.constraint(equalTo: gameView.safeAreaLayoutGuide.topAnchor, constant: 60),
+            button.widthAnchor.constraint(equalToConstant: 56),
+            button.heightAnchor.constraint(equalToConstant: 56)
+        ])
+
+        self.floatingButton = button
     }
 
     @objc private func showMenu() {
