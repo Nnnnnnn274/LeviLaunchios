@@ -128,14 +128,13 @@ jobs:
 
           **Usage:**
           \`\`\`
-          unzip LeviLauncher-${VERSION}-ios.zip
-          optool install -c load \\
-            -p @executable_path/LeviLauncher.dylib \\
-            -t Minecraft.app/Minecraft
-          ldid -S Minecraft.app
+          # 1. Get a decrypted Minecraft IPA
+          # 2. Inject using Azule (or similar)
+          azule -i Minecraft.ipa -o out.ipa -f LeviLauncher.dylib
+          # 3. Sideload out.ipa via SideStore
           \`\`\`
 
-          **Requirements:** Jailbroken device or TrollStore, decrypted Minecraft IPA.
+          **Requirements:** Decrypted Minecraft IPA, IPA injector (e.g. Azule), SideStore (or any sideload tool).
           EOF
           gh release create "$TAG" \
             "dist/LeviLauncher-${VERSION}-ios.zip" \
