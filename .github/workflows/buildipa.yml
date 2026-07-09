@@ -58,10 +58,13 @@ jobs:
                      -scheme "$SCHEME" \
                      -configuration "$CONFIGURATION" \
                      -sdk "$SDK" \
+                     -destination 'generic/platform=iOS' \
                      -quiet \
                      CODE_SIGNING_ALLOWED=NO \
                      CLANG_ENABLE_MODULE_DEBUGGING=NO \
                      COMPILER_INDEX_STORE_ENABLE=NO \
+                     SUPPORTS_MACCATALYST=NO \
+                     SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD=NO \
                      build 2>&1
 
       - name: Locate Built Framework

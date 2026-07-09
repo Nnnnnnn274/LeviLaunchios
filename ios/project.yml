@@ -39,6 +39,8 @@ targets:
         CLANG_CXX_LIBRARY: "libc++"
         ENABLE_BITCODE: NO
         IPHONEOS_DEPLOYMENT_TARGET: "14.0"
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
     info:
       path: LeviLauncher/Info.plist
     preBuildScripts:
