@@ -5,12 +5,6 @@
 #import <mach/mach.h>
 #import <unistd.h>
 
-// Forward-declare the Swift LauncherEntry class
-@interface LauncherEntry : NSObject
-+ (instancetype)shared;
-- (void)initialize;
-@end
-
 #pragma mark - JIT detection
 
 static bool jit_is_available(void) {
@@ -38,7 +32,8 @@ static void try_init(void) {
     }
 
     // Register observer and trigger init
-    [[LauncherEntry shared] initialize];
+    id entry = [NSClassFromString(@"LauncherEntry") shared];
+    [entry initialize];
     [[NSNotificationCenter defaultCenter]
      postNotificationName:@"LeviLauncherInitializationNotification"
      object:nil];
@@ -48,7 +43,8 @@ static void try_init(void) {
 __attribute__((visibility("default")))
 void LeviLauncherInit(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        [[LauncherEntry shared] initialize];
+        id entry = [NSClassFromString(@"LauncherEntry") shared];
+        [entry initialize];
         [[NSNotificationCenter defaultCenter]
          postNotificationName:@"LeviLauncherInitializationNotification"
          object:nil];
