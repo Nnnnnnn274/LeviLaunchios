@@ -14,7 +14,7 @@ final class MainViewModel: ObservableObject {
         accounts = MsftAccountStore.list()
     }
 
-    func login() async {
+    func login(presenting viewController: UIViewController) async {
         isLoading = true
         errorMessage = nil
 
@@ -30,7 +30,7 @@ final class MainViewModel: ObservableObject {
                 state: state
             )
 
-            let callbackURL = try await performWebAuth(url: url, callbackScheme: "msauth.\(Bundle.main.bundleIdentifier ?? "com.levimc.launcher")")
+            let callbackURL = try await performWebAuth(url: url, callbackScheme: "msauth.\(Bundle.main.bundleIdentifier ?? "com.levimc.launcher")", presenting: viewController)
 
             guard let code = extractCode(from: callbackURL, expectedState: state) else {
                 throw AuthError.invalidAccount
@@ -67,7 +67,7 @@ final class MainViewModel: ObservableObject {
         loadAccounts()
     }
 
-    private func performWebAuth(url: URL, callbackScheme: String) async throws -> URL {
+    private func performWebAuth(url: URL, callbackScheme: String, presenting viewController: UIViewController) async throws -> URL {
         try await withCheckedThrowingContinuation { continuation in
             let session = ASWebAuthenticationSession(url: url, callbackURLScheme: callbackScheme) { url, error in
                 if let error = error {
@@ -79,7 +79,10 @@ final class MainViewModel: ObservableObject {
                 }
             }
             session.prefersEphemeralWebBrowserSession = true
-            session.start()
+            session.presentationContextProvider = viewController as? ASWebAuthenticationSessionPresentationContextProviding
+            if !session.start() {
+                continuation.resume(throwing: AuthError.invalidAccount)
+            }
         }
     }
 

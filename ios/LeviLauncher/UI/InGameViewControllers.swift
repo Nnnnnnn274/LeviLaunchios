@@ -1,8 +1,14 @@
 import UIKit
+import AuthenticationServices
 
 // MARK: - In-Game Account Management
 
-class InGameAccountViewController: UITableViewController {
+class InGameAccountViewController: UITableViewController, ASWebAuthenticationSessionPresentationContextProviding {
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        view.window ?? UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.keyWindow }
+            .first ?? UIWindow()
+    }
     private var accounts: [MsftAccount] = []
 
     override func viewDidLoad() {
@@ -37,7 +43,7 @@ class InGameAccountViewController: UITableViewController {
     @objc private func addAccount() {
         Task {
             let viewModel = MainViewModel()
-            await viewModel.login()
+            await viewModel.login(presenting: self)
             loadAccounts()
         }
     }
