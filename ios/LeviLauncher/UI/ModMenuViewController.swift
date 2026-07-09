@@ -1,6 +1,7 @@
 import UIKit
 
-class ModMenuViewController: UIViewController {
+class ModMenuViewController: UIViewController, UIGestureRecognizerDelegate {
+    private var menuView: ModMenuView?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -9,24 +10,34 @@ class ModMenuViewController: UIViewController {
     }
 
     private func setupMenuView() {
-        let menuView = ModMenuView(frame: CGRect(x: 20, y: 60,
-                                                   width: view.bounds.width - 40,
-                                                   height: view.bounds.height - 120))
-        menuView.backgroundColor = UIColor(white: 0.08, alpha: 0.95)
-        menuView.layer.cornerRadius = 16
-        menuView.layer.masksToBounds = true
-        menuView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        menuView.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
-        menuView.alpha = 0
-        view.addSubview(menuView)
+        let mv = ModMenuView(frame: CGRect(x: 20, y: 60,
+                                             width: view.bounds.width - 40,
+                                             height: view.bounds.height - 120))
+        mv.backgroundColor = UIColor(white: 0.08, alpha: 0.95)
+        mv.layer.cornerRadius = 16
+        mv.layer.masksToBounds = true
+        mv.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        mv.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
+        mv.alpha = 0
+        view.addSubview(mv)
+        menuView = mv
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(dismissSelf))
+        tap.delegate = self
         view.addGestureRecognizer(tap)
 
         UIView.animate(withDuration: 0.2) {
-            menuView.transform = .identity
-            menuView.alpha = 1
+            mv.transform = .identity
+            mv.alpha = 1
         }
+    }
+
+    func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
+        if gesture is UITapGestureRecognizer {
+            let touchPoint = gesture.location(in: view)
+            return !(menuView?.frame.contains(touchPoint) ?? false)
+        }
+        return true
     }
 
     @objc private func dismissSelf() {
@@ -100,12 +111,25 @@ class ModMenuView: UIView {
             if let vc = next as? UIViewController { return vc }
             responder = next
         }
-        return nil
+        // Fallback: find the topmost presented VC
+        return UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.keyWindow }
+            .first?.rootViewController?.topMostPresented
     }
 
     private func presentViewController(_ vc: UIViewController) {
         guard let parent = parentViewController else { return }
         parent.present(vc, animated: true)
+    }
+}
+
+extension UIViewController {
+    var topMostPresented: UIViewController {
+        var top = self
+        while let next = top.presentedViewController {
+            top = next
+        }
+        return top
     }
 }
 
