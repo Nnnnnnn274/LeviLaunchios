@@ -153,9 +153,9 @@ void Hooks_Initialize() {
 
         // 2. Hook Minecraft view controller lifecycle
         const char *classNames[] = {
-            "MCGameViewController", "MinecraftViewController",
-            "GameViewController", "MCMainViewController",
-            "ViewController", nil
+            "minecraftpeViewController", "MCGameViewController",
+            "MinecraftViewController", "GameViewController",
+            nil
         };
         Class vcClass = nil;
         for (int i = 0; classNames[i] != nil; i++) {
