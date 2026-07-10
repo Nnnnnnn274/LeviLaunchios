@@ -73,6 +73,9 @@ namespace ContentRegistry {
     bool registerContent(const std::string &id, const std::string &name,
                          RegistryType type, void *nativePtr = nullptr);
 
+    // Removes metadata only; materialized native Minecraft objects are retained.
+    bool unregisterContent(const std::string &id, RegistryType type);
+
     // Queries
     const ContentEntry *getEntry(RegistryType type, const std::string &id);
     std::vector<ContentEntry> getEntries(RegistryType type);

@@ -6,6 +6,7 @@
 
 #include "../Preloader/Preloader.hpp"
 #include "../Hooks/UIHook.h"
+#include "../Hooks/TextureHook.h"
 #include "../InbuiltMods/ZoomMod.hpp"
 #include "../InbuiltMods/FpsMod.hpp"
 #include "../InbuiltMods/SnaplookMod.hpp"
@@ -133,6 +134,20 @@ static bool g_preloaderInitialized = false;
     if (!view) return NO;
     UIHook::injectOverlayNow((__bridge void *)viewController, (__bridge void *)view);
     return YES;
+}
+
++ (BOOL)setTextureOverrides:(NSDictionary<NSString *, NSString *> *)overrides {
+    std::vector<std::pair<std::string, std::string>> nativeOverrides;
+    nativeOverrides.reserve(overrides.count);
+    [overrides enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSString *value, BOOL *) {
+        nativeOverrides.emplace_back(key.UTF8String ?: "", value.UTF8String ?: "");
+    }];
+    TextureHook::setTextureOverrides(nativeOverrides);
+    return TextureHook::initialize() ? YES : NO;
+}
+
++ (NSUInteger)textureOverrideCount {
+    return (NSUInteger)TextureHook::textureOverrideCount();
 }
 
 + (void *)resolveSymbol:(NSString *)symbolName {

@@ -24,6 +24,9 @@ final class ContentImporter {
             return .resourcePack(pack)
 
         case "zip":
+            if let mod = try? NativeModManager.shared.importMod(from: url) {
+                return .mod(mod)
+            }
             if let world = try importZIPAsWorld(from: url, into: baseDir.appendingPathComponent("worlds")) {
                 return world
             }
@@ -32,14 +35,13 @@ final class ContentImporter {
             }
             throw ContentError.importFailed
 
+        case "levipack":
+            return .mod(try NativeModManager.shared.importMod(from: url))
+
         case "so", "dylib":
-            let modsDir = baseDir.appendingPathComponent("mods")
-            try FileManager.default.createDirectory(at: modsDir, withIntermediateDirectories: true)
-            let dest = modsDir.appendingPathComponent(url.lastPathComponent)
-            try FileManager.default.copyItem(at: url, to: dest)
-            let mod = Mod(id: url.lastPathComponent, fileName: url.lastPathComponent,
-                          entryPath: dest.path, displayName: url.deletingPathExtension().lastPathComponent)
-            return .mod(mod)
+            // Installable mods are ZIP packages. The platform-specific native
+            // library is an internal entry referenced by manifest.json.
+            throw ContentError.importFailed
 
         case "levibackup":
             return try importBackup(from: url, into: baseDir)

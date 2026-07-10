@@ -3,9 +3,10 @@ import zlib
 
 extension FileManager {
     func unzipItem(at sourceURL: URL, to destinationURL: URL) throws {
-        guard sourceURL.pathExtension == "zip" || sourceURL.pathExtension == "mcworld"
-                || sourceURL.pathExtension == "mcpack" || sourceURL.pathExtension == "mcaddon"
-                || sourceURL.pathExtension == "levibackup" else {
+        let fileExtension = sourceURL.pathExtension.lowercased()
+        guard fileExtension == "zip" || fileExtension == "mcworld"
+                || fileExtension == "mcpack" || fileExtension == "mcaddon"
+                || fileExtension == "levibackup" || fileExtension == "levipack" else {
             throw ZipError.unsupportedFormat
         }
 
@@ -37,104 +38,134 @@ enum ZipError: LocalizedError {
 
 // Minimal ZIP extraction using zlib
 struct ZipReader {
-    struct LocalFileHeader {
-        let signature: UInt32
-        let versionNeeded: UInt16
-        let flags: UInt16
-        let compressionMethod: UInt16
-        let lastModTime: UInt16
-        let lastModDate: UInt16
-        let crc32: UInt32
-        let compressedSize: UInt32
-        let uncompressedSize: UInt32
-        let fileNameLength: UInt16
-        let extraFieldLength: UInt16
-        let fileName: String
-    }
+    private static let maxEntrySize = 512 * 1024 * 1024
+    private static let maxArchiveSize = 1024 * 1024 * 1024
 
     static func extract(data: Data, to destinationURL: URL) throws {
-        var offset = 0
+        guard let endOffset = findEndOfCentralDirectory(in: data) else {
+            throw ZipError.invalidArchive
+        }
+        let entryCount = Int(try readUInt16(data: data, offset: endOffset + 10))
+        var centralOffset = Int(try readUInt32(data: data, offset: endOffset + 16))
+        var totalSize = 0
 
-        while offset < data.count - 4 {
-            let signature = data.withUnsafeBytes { ptr in
-                ptr.load(fromByteOffset: offset, as: UInt32.self).littleEndian
+        for _ in 0..<entryCount {
+            guard try readUInt32(data: data, offset: centralOffset) == 0x02014b50 else {
+                throw ZipError.invalidArchive
+            }
+            let flags = try readUInt16(data: data, offset: centralOffset + 8)
+            guard flags & 0x0001 == 0 else {
+                throw ZipError.extractionFailed("Encrypted ZIP entries are unsupported")
+            }
+            let method = try readUInt16(data: data, offset: centralOffset + 10)
+            let expectedCRC = try readUInt32(data: data, offset: centralOffset + 16)
+            let compressedSize = Int(try readUInt32(data: data, offset: centralOffset + 20))
+            let uncompressedSize = Int(try readUInt32(data: data, offset: centralOffset + 24))
+            let nameLength = Int(try readUInt16(data: data, offset: centralOffset + 28))
+            let extraLength = Int(try readUInt16(data: data, offset: centralOffset + 30))
+            let commentLength = Int(try readUInt16(data: data, offset: centralOffset + 32))
+            let localOffset = Int(try readUInt32(data: data, offset: centralOffset + 42))
+            let nameStart = centralOffset + 46
+            let nameData = try slice(data, nameStart..<(nameStart + nameLength))
+            guard let fileName = String(data: nameData, encoding: .utf8), !fileName.isEmpty else {
+                throw ZipError.invalidArchive
+            }
+            centralOffset = nameStart + nameLength + extraLength + commentLength
+
+            guard uncompressedSize <= maxEntrySize,
+                  totalSize <= maxArchiveSize - uncompressedSize else {
+                throw ZipError.extractionFailed("Archive is too large")
+            }
+            totalSize += uncompressedSize
+
+            let outputURL = try safeOutputURL(fileName, under: destinationURL)
+            if fileName.hasSuffix("/") {
+                try FileManager.default.createDirectory(at: outputURL, withIntermediateDirectories: true)
+                continue
             }
 
-            if signature == 0x04034b50 { // Local file header signature
-                let header = try readLocalFileHeader(data: data, offset: offset)
-                offset += 30 + Int(header.fileNameLength) + Int(header.extraFieldLength)
-
-                let filePath = destinationURL.appendingPathComponent(header.fileName)
-
-                if header.fileName.hasSuffix("/") {
-                    try FileManager.default.createDirectory(at: filePath, withIntermediateDirectories: true)
-                } else {
-                    try FileManager.default.createDirectory(at: filePath.deletingLastPathComponent(),
-                                                            withIntermediateDirectories: true)
-
-                    let rawData = data[offset..<offset + Int(header.compressedSize)]
-                    let extracted: Data
-
-                    if header.compressionMethod == 0 {
-                        extracted = rawData
-                    } else if header.compressionMethod == 8 {
-                        extracted = try inflate(rawData, uncompressedSize: Int(header.uncompressedSize))
-                    } else {
-                        throw ZipError.extractionFailed("Unsupported compression: \(header.compressionMethod)")
-                    }
-
-                    try extracted.write(to: filePath, options: .atomic)
-                }
-
-                offset += Int(header.compressedSize)
-            } else if signature == 0x02014b50 || signature == 0x06054b50 {
-                break // Central directory or End of central directory
-            } else {
-                offset += 1
+            guard try readUInt32(data: data, offset: localOffset) == 0x04034b50 else {
+                throw ZipError.invalidArchive
             }
+            let localNameLength = Int(try readUInt16(data: data, offset: localOffset + 26))
+            let localExtraLength = Int(try readUInt16(data: data, offset: localOffset + 28))
+            let payloadStart = localOffset + 30 + localNameLength + localExtraLength
+            let compressed = try slice(data, payloadStart..<(payloadStart + compressedSize))
+            let extracted: Data
+            switch method {
+            case 0:
+                extracted = compressed
+            case 8:
+                extracted = try inflate(compressed, uncompressedSize: uncompressedSize)
+            default:
+                throw ZipError.extractionFailed("Unsupported compression: \(method)")
+            }
+            guard extracted.count == uncompressedSize,
+                  checksum(extracted) == expectedCRC else {
+                throw ZipError.extractionFailed("Corrupt ZIP entry: \(fileName)")
+            }
+            try FileManager.default.createDirectory(
+                at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try extracted.write(to: outputURL, options: .atomic)
         }
     }
 
-    private static func readLocalFileHeader(data: Data, offset: Int) throws -> LocalFileHeader {
-        var o = offset
-        let signature = readUInt32(data: data, offset: o); o += 4
-        let versionNeeded = readUInt16(data: data, offset: o); o += 2
-        let flags = readUInt16(data: data, offset: o); o += 2
-        let compressionMethod = readUInt16(data: data, offset: o); o += 2
-        let lastModTime = readUInt16(data: data, offset: o); o += 2
-        let lastModDate = readUInt16(data: data, offset: o); o += 2
-        let crc32 = readUInt32(data: data, offset: o); o += 4
-        let compressedSize = readUInt32(data: data, offset: o); o += 4
-        let uncompressedSize = readUInt32(data: data, offset: o); o += 4
-        let fileNameLength = readUInt16(data: data, offset: o); o += 2
-        let extraFieldLength = readUInt16(data: data, offset: o); o += 2
-
-        let fileName = String(data: data[o..<o + Int(fileNameLength)], encoding: .utf8)
-            ?? String(data: data[o..<o + Int(fileNameLength)], encoding: .ascii)
-            ?? "unknown"
-
-        return LocalFileHeader(
-            signature: signature, versionNeeded: versionNeeded, flags: flags,
-            compressionMethod: compressionMethod, lastModTime: lastModTime,
-            lastModDate: lastModDate, crc32: crc32, compressedSize: compressedSize,
-            uncompressedSize: uncompressedSize, fileNameLength: fileNameLength,
-            extraFieldLength: extraFieldLength, fileName: fileName
-        )
-    }
-
-    private static func readUInt16(data: Data, offset: Int) -> UInt16 {
-        data.withUnsafeBytes { ptr in
-            ptr.load(fromByteOffset: offset, as: UInt16.self).littleEndian
+    private static func findEndOfCentralDirectory(in data: Data) -> Int? {
+        guard data.count >= 22 else { return nil }
+        let lowerBound = max(0, data.count - 65_557)
+        for offset in stride(from: data.count - 22, through: lowerBound, by: -1) {
+            guard (try? readUInt32(data: data, offset: offset)) == 0x06054b50,
+                  let commentLength = try? readUInt16(data: data, offset: offset + 20),
+                  offset + 22 + Int(commentLength) == data.count else { continue }
+            return offset
         }
+        return nil
     }
 
-    private static func readUInt32(data: Data, offset: Int) -> UInt32 {
-        data.withUnsafeBytes { ptr in
-            ptr.load(fromByteOffset: offset, as: UInt32.self).littleEndian
+    private static func readUInt16(data: Data, offset: Int) throws -> UInt16 {
+        guard offset >= 0, offset + 2 <= data.count else { throw ZipError.invalidArchive }
+        return UInt16(data[offset]) | (UInt16(data[offset + 1]) << 8)
+    }
+
+    private static func readUInt32(data: Data, offset: Int) throws -> UInt32 {
+        guard offset >= 0, offset + 4 <= data.count else { throw ZipError.invalidArchive }
+        return UInt32(data[offset])
+            | (UInt32(data[offset + 1]) << 8)
+            | (UInt32(data[offset + 2]) << 16)
+            | (UInt32(data[offset + 3]) << 24)
+    }
+
+    private static func slice(_ data: Data, _ range: Range<Int>) throws -> Data {
+        guard range.lowerBound >= 0, range.upperBound <= data.count else {
+            throw ZipError.invalidArchive
+        }
+        return Data(data[range])
+    }
+
+    private static func safeOutputURL(_ name: String, under destination: URL) throws -> URL {
+        let normalizedName = name.replacingOccurrences(of: "\\", with: "/")
+        guard !normalizedName.hasPrefix("/"),
+              !normalizedName.split(separator: "/").contains("..") else {
+            throw ZipError.extractionFailed("Unsafe archive path")
+        }
+        let root = destination.standardizedFileURL.path
+        let output = destination.appendingPathComponent(normalizedName).standardizedFileURL
+        let prefix = root.hasSuffix("/") ? root : root + "/"
+        guard output.path == root || output.path.hasPrefix(prefix) else {
+            throw ZipError.extractionFailed("Unsafe archive path")
+        }
+        return output
+    }
+
+    private static func checksum(_ data: Data) -> UInt32 {
+        data.withUnsafeBytes { bytes in
+            guard let base = bytes.bindMemory(to: Bytef.self).baseAddress else { return 0 }
+            return UInt32(zlib.crc32(0, base, uInt(data.count)))
         }
     }
 
     private static func inflate(_ data: Data, uncompressedSize: Int) throws -> Data {
+        if uncompressedSize == 0 { return Data() }
         var result = Data(count: uncompressedSize)
         var stream = z_stream()
 

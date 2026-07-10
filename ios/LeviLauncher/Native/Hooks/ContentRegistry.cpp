@@ -91,7 +91,11 @@ namespace ContentRegistry {
         // Check for duplicates
         for (auto &e : entries) {
             if (e.id == id) {
-                e.nativePtr = nativePtr;
+                // Metadata refreshes use nullptr. Never let one erase a native
+                // object that Minecraft has already materialized.
+                if (nativePtr != nullptr || e.nativePtr == nullptr) {
+                    e.nativePtr = nativePtr;
+                }
                 return true; // already registered, update ptr
             }
         }
@@ -103,6 +107,21 @@ namespace ContentRegistry {
         entry.numericId = (int)entries.size();
         entry.nativePtr = nativePtr;
         entries.push_back(std::move(entry));
+        return true;
+    }
+
+    bool unregisterContent(const std::string &id, RegistryType type) {
+        std::lock_guard<std::mutex> lock(s_mutex);
+        auto it = s_registries.find(type);
+        if (it == s_registries.end()) return false;
+
+        auto &entries = it->second;
+        auto entry = std::find_if(entries.begin(), entries.end(),
+                                  [&id](const ContentEntry &candidate) {
+                                      return candidate.id == id && candidate.nativePtr == nullptr;
+                                  });
+        if (entry == entries.end()) return false;
+        entries.erase(entry);
         return true;
     }
 

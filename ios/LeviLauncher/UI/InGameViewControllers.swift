@@ -1,4 +1,5 @@
 import UIKit
+import UniformTypeIdentifiers
 
 // MARK: - Minecraft-style helpers
 private func mcLabel(_ text: String, size: CGFloat = 15) -> UILabel {
@@ -122,7 +123,7 @@ class InGameAccountViewController: UITableViewController {
 private let builtinSection = 0
 private let externalSection = 1
 
-class InGameModListViewController: UITableViewController {
+class InGameModListViewController: UITableViewController, UIDocumentPickerDelegate {
     private var externalMods: [Mod] = []
     private var builtinMods: [BuiltinMod] { BuiltinModManager.shared.mods }
 
@@ -142,18 +143,39 @@ class InGameModListViewController: UITableViewController {
     }
 
     private func loadExternalMods() {
-        let modsDir = LauncherStorage.minecraftRoot.appendingPathComponent("mods")
-        guard let contents = try? FileManager.default.contentsOfDirectory(at: modsDir,
-                            includingPropertiesForKeys: nil) else { return }
-        externalMods = contents.compactMap { url -> Mod? in
-            guard url.pathExtension == "dylib" else { return nil }
-            return Mod(id: url.lastPathComponent, fileName: url.lastPathComponent,
-                       entryPath: url.path, displayName: url.deletingPathExtension().lastPathComponent)
-        }
+        externalMods = NativeModManager.shared.discoverMods()
         tableView.reloadData()
     }
 
-    @objc private func addMod() {}
+    @objc private func addMod() {
+        let types = ["zip", "levipack"].compactMap { UTType(filenameExtension: $0) }
+        let picker = UIDocumentPickerViewController(
+            forOpeningContentTypes: types.isEmpty ? [.data] : types, asCopy: true)
+        picker.delegate = self
+        picker.allowsMultipleSelection = false
+        present(picker, animated: true)
+    }
+
+    func documentPicker(_ controller: UIDocumentPickerViewController,
+                        didPickDocumentsAt urls: [URL]) {
+        guard let source = urls.first else { return }
+        do {
+            let mod = try NativeModManager.shared.importMod(from: source)
+            NativeModManager.shared.setEnabled(true, for: mod)
+            if !LauncherBridge.injectMod(mod.entryPath) {
+                throw ContentError.importFailed
+            }
+            loadExternalMods()
+        } catch {
+            let alert = UIAlertController(
+                title: "Mod Import Failed",
+                message: "Select a mod ZIP containing manifest.json and one iOS ARM64 native entry. " +
+                    error.localizedDescription,
+                preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            present(alert, animated: true)
+        }
+    }
 
     // ── Sections ────────────────────────────────────────────────
 
@@ -230,9 +252,9 @@ class InGameModListViewController: UITableViewController {
             cell.imageView?.tintColor = .systemGray
         } else {
             let mod = externalMods[indexPath.row]
-            let loaded = LauncherBridge.loadedMods() as? [String] ?? []
-            let isLoaded = loaded.contains(mod.fileName)
+            let isLoaded = LauncherBridge.isModLoaded(mod.entryPath)
             cell.textLabel?.text = mod.displayName
+            cell.detailTextLabel?.text = [mod.author, mod.version].compactMap { $0 }.joined(separator: " • ")
             cell.imageView?.image = UIImage(systemName: isLoaded ? "checkmark.circle.fill" : "circle")
             cell.imageView?.tintColor = isLoaded ? .systemGreen : .systemGray
         }
@@ -241,8 +263,7 @@ class InGameModListViewController: UITableViewController {
 
     private func tapExternalMod(at index: Int) {
         var mod = externalMods[index]
-        let loaded = LauncherBridge.loadedMods() as? [String] ?? []
-        guard !loaded.contains(mod.fileName) else { return }
+        guard !LauncherBridge.isModLoaded(mod.entryPath) else { return }
 
         let cell = tableView.cellForRow(at: IndexPath(row: index, section: externalSection))
         cell?.textLabel?.text = "Loading..."
@@ -251,6 +272,7 @@ class InGameModListViewController: UITableViewController {
         let ok = LauncherBridge.injectMod(mod.entryPath)
         if ok {
             mod.isEnabled = true
+            NativeModManager.shared.setEnabled(true, for: mod)
         }
         loadExternalMods()
     }
@@ -258,7 +280,7 @@ class InGameModListViewController: UITableViewController {
 
 // MARK: - In-Game Content Browser
 
-class InGameContentViewController: UITableViewController {
+class InGameContentViewController: UITableViewController, UIDocumentPickerDelegate {
     private let contentType: Int
     private var items: [ContentItem] = []
 
@@ -277,17 +299,54 @@ class InGameContentViewController: UITableViewController {
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
         tableView.backgroundColor = mcBg
         tableView.separatorColor = mcBorder
+        if contentType == 1 {
+            navigationItem.rightBarButtonItem = UIBarButtonItem(
+                image: UIImage(systemName: "plus"),
+                style: .plain, target: self, action: #selector(importResourcePack)
+            )
+            navigationItem.rightBarButtonItem?.tintColor = .systemGreen
+        }
         loadContent()
     }
 
+    @objc private func importResourcePack() {
+        let types = ["mcpack", "mcaddon", "zip"].compactMap { UTType(filenameExtension: $0) }
+        let picker = UIDocumentPickerViewController(
+            forOpeningContentTypes: types.isEmpty ? [.data] : types,
+            asCopy: true
+        )
+        picker.delegate = self
+        picker.allowsMultipleSelection = false
+        present(picker, animated: true)
+    }
+
+    func documentPicker(_ controller: UIDocumentPickerViewController,
+                        didPickDocumentsAt urls: [URL]) {
+        guard let source = urls.first else { return }
+        do {
+            guard try ResourcePackManager.shared.importPack(
+                from: source, to: ResourcePackManager.shared.packsDirectory
+            ) != nil else {
+                throw ContentError.importFailed
+            }
+            ResourcePackManager.shared.applyTextureOverrides()
+            loadContent()
+        } catch {
+            let alert = UIAlertController(
+                title: "Import Failed", message: error.localizedDescription, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            present(alert, animated: true)
+        }
+    }
+
     private func loadContent() {
-        let gameDir = LauncherStorage.sharedDataRoot.appendingPathComponent("games/com.mojang")
+        let gameDir = LauncherStorage.appRoot.appendingPathComponent("games/com.mojang")
         switch contentType {
         case 0:
             let worldsDir = gameDir.appendingPathComponent("minecraftWorlds")
             items = WorldManager.shared.listWorlds(in: worldsDir)
         case 1:
-            let packsDir = gameDir.appendingPathComponent("resource_packs")
+            let packsDir = ResourcePackManager.shared.packsDirectory
             items = ResourcePackManager.shared.listPacks(in: packsDir)
         case 3:
             let shotsDir = gameDir.appendingPathComponent("screenshots")
@@ -320,8 +379,23 @@ class InGameContentViewController: UITableViewController {
             cell.textLabel?.text = item.name
             cell.detailTextLabel?.text = item.formattedSize
             cell.detailTextLabel?.textColor = UIColor(red: 0.6, green: 0.6, blue: 0.6, alpha: 1)
+            if contentType == 1, let pack = item as? ResourcePackItem {
+                cell.accessoryType = pack.isEnabled ? .checkmark : .none
+                cell.imageView?.image = UIImage(systemName: pack.isEnabled ? "paintbrush.fill" : "paintbrush")
+                cell.imageView?.tintColor = pack.isEnabled ? .systemGreen : .systemGray
+            }
         }
         return cell
+    }
+
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        guard contentType == 1,
+              indexPath.row < items.count,
+              let pack = items[indexPath.row] as? ResourcePackItem else { return }
+        ResourcePackManager.shared.setEnabled(!pack.isEnabled, for: pack)
+        ResourcePackManager.shared.applyTextureOverrides()
+        tableView.reloadRows(at: [indexPath], with: .automatic)
     }
 }
 

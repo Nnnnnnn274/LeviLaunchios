@@ -6,11 +6,16 @@
 #include "../Hooks/TextureHook.h"
 #include "../Hooks/RenderHook.h"
 #include "../Hooks/UIHook.h"
+#include "../Hooks/NativeModUI.h"
 #include "../Hooks/ContentRegistry.h"
 #include "../Hooks/DimensionAPI.h"
 #include "../Hooks/BlockItemAPI.h"
+#include "../InbuiltMods/CreatePort.hpp"
+#include "../InbuiltMods/AetherPort.hpp"
+#include "../InbuiltMods/TwilightForestPort.hpp"
 
 #include <CoreFoundation/CoreFoundation.h>
+#include <cstdio>
 #include <dlfcn.h>
 #include <mach-o/dyld.h>
 #include <cstring>
@@ -30,6 +35,16 @@ namespace Preloader {
 
     static std::vector<ModInfo> s_loadedMods;
     static std::map<std::string, void *> s_modHandles;
+
+    static std::string pathFileName(const std::string &path) {
+        const size_t slash = path.find_last_of("/\\");
+        return slash == std::string::npos ? path : path.substr(slash + 1);
+    }
+
+    static std::string pathParent(const std::string &path) {
+        const size_t slash = path.find_last_of("/\\");
+        return slash == std::string::npos ? std::string() : path.substr(0, slash);
+    }
 
     // ── Minecraft binary info ────────────────────────────────
 
@@ -72,8 +87,14 @@ namespace Preloader {
         Hooks_Initialize();
         RenderHook::initialize();
         UIHook::initialize();
+        NativeModUI::initialize();
         TextureHook::initialize();
         ContentRegistry::initialize();
+        BlockItemAPI::initialize();
+        DimensionAPI::initialize();
+        CreatePort::initialize();
+        AetherPort::initialize();
+        TwilightForestPort::initialize();
 
         s_initialized = true;
         return true;
@@ -261,12 +282,19 @@ namespace Preloader {
             if (mod.id == modPath) return true;
         }
 
-        void *handle = dlopen(modPath.c_str(), RTLD_NOW | RTLD_LOCAL);
+        // Match LeviLaunchroid's visibility: mods may depend on symbols exposed
+        // by the preloader or by mods loaded earlier in the configured order.
+        void *handle = dlopen(modPath.c_str(), RTLD_NOW | RTLD_GLOBAL);
         if (!handle) return false;
 
         ModInfo info;
         info.id = modPath;
         info.enabled = true;
+
+        const std::string modRoot = pathParent(modPath);
+        const std::string modId = pathFileName(modRoot);
+        const std::string entryFile = pathFileName(modPath);
+        const std::string manifestPath = modRoot + "/manifest.json";
 
         auto nameFunc = reinterpret_cast<const char *(*)()>(dlsym(handle, "mod_name"));
         info.name = nameFunc ? nameFunc() : modPath.substr(modPath.find_last_of('/') + 1);
@@ -277,9 +305,60 @@ namespace Preloader {
         auto authorFunc = reinterpret_cast<const char *(*)()>(dlsym(handle, "mod_author"));
         if (authorFunc) info.author = authorFunc();
 
-        auto initFunc = reinterpret_cast<void (*)(PreloaderAPI *)>(dlsym(handle, "mod_init"));
-        if (initFunc) {
+        bool entryFound = false;
+        auto lifecycleLoad = reinterpret_cast<PLModLoadFunc>(dlsym(handle, "PLMod_Load"));
+        if (lifecycleLoad) {
+            PLModInfo lifecycleInfo = {
+                .size = (uint32_t)sizeof(PLModInfo),
+                .mod_id = modId.c_str(),
+                .display_name = info.name.c_str(),
+                .author = info.author.c_str(),
+                .version = info.version.c_str(),
+                .entry_path = entryFile.c_str(),
+                .entry_file_name = entryFile.c_str(),
+                .library_path = modPath.c_str(),
+                .icon_path = "",
+                .manifest_path = manifestPath.c_str(),
+                .mod_root_path = modRoot.c_str(),
+            };
+            if (!lifecycleLoad(nullptr, &lifecycleInfo)) {
+                return false;
+            }
+            entryFound = true;
+            if (auto enable = reinterpret_cast<PLModLifecycleFunc>(dlsym(handle, "PLMod_Enable"))) {
+                if (!enable()) {
+                    return false;
+                }
+            }
+        } else if (auto legacyLoad = reinterpret_cast<void (*)(void *, const PLModInfo *)>(
+                       dlsym(handle, "LeviMod_Load"))) {
+            PLModInfo legacyInfo = {
+                .size = (uint32_t)sizeof(PLModInfo),
+                .mod_id = modId.c_str(),
+                .display_name = info.name.c_str(),
+                .author = info.author.c_str(),
+                .version = info.version.c_str(),
+                .entry_path = entryFile.c_str(),
+                .entry_file_name = entryFile.c_str(),
+                .library_path = modPath.c_str(),
+                .icon_path = "",
+                .manifest_path = manifestPath.c_str(),
+                .mod_root_path = modRoot.c_str(),
+            };
+            legacyLoad(nullptr, &legacyInfo);
+            entryFound = true;
+        } else if (auto initFunc = reinterpret_cast<void (*)(PreloaderAPI *)>(
+                       dlsym(handle, "mod_init"))) {
+            // Preserve the original iOS API while supporting upstream-style
+            // lifecycle exports for newly rebuilt mods.
             initFunc(getModAPI());
+            entryFound = true;
+        }
+
+        if (!entryFound) {
+            std::fprintf(stderr,
+                         "[LeviLauncher] Native mod has no PLMod_Load, LeviMod_Load, or mod_init export: %s\n",
+                         modPath.c_str());
         }
 
         s_loadedMods.push_back(info);

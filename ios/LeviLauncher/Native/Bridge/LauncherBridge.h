@@ -41,6 +41,11 @@ typedef void (^LauncherTouchCallback)(int phase, double x, double y);
 // Fallback: walk the window hierarchy looking for the game VC
 + (BOOL)injectOverlayNow; // returns YES if a game VC was found
 
+// Resource-pack texture path overrides. Minecraft remains responsible for
+// decoding the image and managing its memory.
++ (BOOL)setTextureOverrides:(NSDictionary<NSString *, NSString *> *)overrides;
++ (NSUInteger)textureOverrideCount;
+
 // Symbol resolution (for advanced usage)
 + (void * _Nullable)resolveSymbol:(NSString *)symbolName;
 

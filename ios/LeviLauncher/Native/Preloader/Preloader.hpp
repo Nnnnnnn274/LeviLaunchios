@@ -6,6 +6,27 @@
 #include <string>
 #include <vector>
 
+// Source-compatible metadata layout for LeviLaunchroid-style C lifecycle
+// mods rebuilt for iOS. JavaVM is represented as an opaque pointer on iOS.
+extern "C" {
+    struct PLModInfo {
+        uint32_t size;
+        const char *mod_id;
+        const char *display_name;
+        const char *author;
+        const char *version;
+        const char *entry_path;
+        const char *entry_file_name;
+        const char *library_path;
+        const char *icon_path;
+        const char *manifest_path;
+        const char *mod_root_path;
+    };
+
+    typedef bool (*PLModLoadFunc)(void *javaVm, const PLModInfo *modInfo);
+    typedef bool (*PLModLifecycleFunc)();
+}
+
 namespace Preloader {
 
     // ── API struct passed to mods (C-compatible!) ───────────

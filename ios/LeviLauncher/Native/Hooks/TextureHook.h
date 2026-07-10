@@ -1,9 +1,12 @@
 #ifndef TEXTUREHOOK_H
 #define TEXTUREHOOK_H
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace TextureHook {
 
@@ -27,6 +30,14 @@ namespace TextureHook {
 
     // Register a callback for texture replacement
     void onTextureLoad(TextureCallback callback);
+
+    // Replace texture paths while leaving image decoding and ownership to
+    // Minecraft. Keys are normalized, case-insensitive resource paths.
+    void setTextureOverrides(
+        const std::vector<std::pair<std::string, std::string>> &overrides);
+
+    size_t textureOverrideCount();
+    bool isInitialized();
 
     // Remove all callbacks
     void clearCallbacks();
