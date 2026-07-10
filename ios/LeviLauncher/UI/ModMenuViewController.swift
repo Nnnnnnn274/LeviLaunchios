@@ -1,39 +1,41 @@
 import UIKit
 
 // MARK: - Minecraft-style button
-private func makeMinecraftButton(title: String, icon: String) -> UIButton {
+private enum MinecraftButtonStyle {
+    case stone
+    case redstone
+}
+
+private func makeMinecraftButton(title: String, icon: String,
+                                 style: MinecraftButtonStyle = .stone) -> UIButton {
     let btn = UIButton(type: .custom)
     btn.translatesAutoresizingMaskIntoConstraints = false
 
-    // Stone texture gradient
-    let base = UIColor(red: 0.55, green: 0.55, blue: 0.57, alpha: 1)
-    let highlight = UIColor(red: 0.7, green: 0.7, blue: 0.72, alpha: 1)
-    let shadow = UIColor(red: 0.35, green: 0.35, blue: 0.37, alpha: 1)
+    // Square, bevelled controls match Bedrock menus better than rounded iOS UI.
+    let base: UIColor = style == .stone
+        ? UIColor(red: 0.40, green: 0.40, blue: 0.42, alpha: 1)
+        : UIColor(red: 0.50, green: 0.20, blue: 0.16, alpha: 1)
+    let highlight: UIColor = style == .stone
+        ? UIColor(red: 0.62, green: 0.62, blue: 0.64, alpha: 1)
+        : UIColor(red: 0.72, green: 0.32, blue: 0.26, alpha: 1)
+    let shadow: UIColor = style == .stone
+        ? UIColor(red: 0.20, green: 0.20, blue: 0.22, alpha: 1)
+        : UIColor(red: 0.26, green: 0.08, blue: 0.06, alpha: 1)
     let border = UIColor(red: 0.13, green: 0.13, blue: 0.15, alpha: 1)
 
     btn.backgroundColor = base
     btn.layer.borderWidth = 3
     btn.layer.borderColor = border.cgColor
-    btn.layer.cornerRadius = 2
-
-    // Top/left highlight, bottom/right shadow via bezier
-    let size = CGSize(width: 1, height: 1)
-    UIGraphicsBeginImageContextWithOptions(size, false, 0)
-    if let ctx = UIGraphicsGetCurrentContext() {
-        ctx.setFillColor(base.cgColor)
-        ctx.fill(CGRect(origin: .zero, size: size))
-    }
-    let bgImage = UIGraphicsGetImageFromCurrentImageContext()
-    UIGraphicsEndImageContext()
-    btn.setBackgroundImage(bgImage, for: .normal)
+    btn.layer.cornerRadius = 0
 
     // Content
-    var cfg = UIButton.Configuration.plain()
-    cfg.title = title
-    cfg.image = UIImage(systemName: icon)
-    cfg.imagePadding = 8
-    cfg.baseForegroundColor = UIColor(red: 0.9, green: 0.9, blue: 0.9, alpha: 1)
-    btn.configuration = cfg
+    btn.setTitle(title, for: .normal)
+    btn.setImage(UIImage(systemName: icon), for: .normal)
+    btn.tintColor = UIColor(red: 0.9, green: 0.9, blue: 0.9, alpha: 1)
+    btn.setTitleColor(UIColor(red: 0.9, green: 0.9, blue: 0.9, alpha: 1), for: .normal)
+    btn.contentHorizontalAlignment = .center
+    btn.imageView?.contentMode = .scaleAspectFit
+    btn.titleEdgeInsets = UIEdgeInsets(top: 0, left: 8, bottom: 0, right: -8)
     btn.titleLabel?.font = UIFont(name: "Menlo-Bold", size: 14) ?? .boldSystemFont(ofSize: 14)
     btn.titleLabel?.shadowColor = UIColor(white: 0, alpha: 0.5)
     btn.titleLabel?.shadowOffset = CGSize(width: 1, height: 1)
@@ -88,6 +90,10 @@ private func makeMinecraftButton(title: String, icon: String) -> UIButton {
     ])
 
     btn.heightAnchor.constraint(equalToConstant: 48).isActive = true
+    btn.addAction(UIAction { [weak btn] _ in
+        btn?.alpha = 0.82
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { btn?.alpha = 1 }
+    }, for: .touchDown)
     return btn
 }
 
@@ -107,21 +113,23 @@ class ModMenuViewController: UIViewController, UIGestureRecognizerDelegate {
         setupMinecraftMenu()
     }
 
+    override var prefersStatusBarHidden: Bool { true }
+
     private func setupMinecraftMenu() {
-        // Chest-like panel background
+        // Darkened world behind a compact, chest-like panel.
         let panel = UIView()
         panel.translatesAutoresizingMaskIntoConstraints = false
-        panel.backgroundColor = UIColor(red: 0.2, green: 0.16, blue: 0.13, alpha: 0.95)
+        panel.backgroundColor = UIColor(red: 0.16, green: 0.12, blue: 0.08, alpha: 0.98)
         panel.layer.borderWidth = 3
         panel.layer.borderColor = UIColor(red: 0.08, green: 0.06, blue: 0.05, alpha: 1).cgColor
-        panel.layer.cornerRadius = 4
+        panel.layer.cornerRadius = 0
         view.addSubview(panel)
         panelView = panel
 
         // Title
         let titleLabel = UILabel()
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        titleLabel.text = "§lLeviLauncher"
+        titleLabel.text = "LEVI LAUNCHER"
         titleLabel.font = UIFont(name: "Menlo-Bold", size: 20) ?? .boldSystemFont(ofSize: 20)
         titleLabel.textColor = UIColor(red: 0.85, green: 0.85, blue: 0.85, alpha: 1)
         titleLabel.shadowColor = UIColor(white: 0, alpha: 0.6)
@@ -152,17 +160,21 @@ class ModMenuViewController: UIViewController, UIGestureRecognizerDelegate {
         }
 
         // Close button (red stone style)
-        let closeBtn = makeMinecraftButton(title: "Close", icon: "xmark")
-        closeBtn.backgroundColor = UIColor(red: 0.55, green: 0.25, blue: 0.2, alpha: 1)
+        let closeBtn = makeMinecraftButton(title: "Back to Game", icon: "xmark", style: .redstone)
         closeBtn.addTarget(self, action: #selector(dismissSelf), for: .touchUpInside)
         panel.addSubview(closeBtn)
 
         // Layout
         let margin: CGFloat = 20
+        let preferredWidth = panel.widthAnchor.constraint(equalTo: view.widthAnchor, constant: -48)
+        preferredWidth.priority = .defaultHigh
+        preferredWidth.isActive = true
         NSLayoutConstraint.activate([
             panel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             panel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            panel.widthAnchor.constraint(equalTo: view.widthAnchor, constant: -60),
+            panel.widthAnchor.constraint(lessThanOrEqualToConstant: 380),
+            panel.leadingAnchor.constraint(greaterThanOrEqualTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 24),
+            panel.trailingAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -24),
             panel.topAnchor.constraint(greaterThanOrEqualTo: view.safeAreaLayoutGuide.topAnchor, constant: 40),
 
             titleLabel.topAnchor.constraint(equalTo: panel.topAnchor, constant: 16),

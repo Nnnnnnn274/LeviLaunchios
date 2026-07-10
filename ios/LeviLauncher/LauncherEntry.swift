@@ -7,6 +7,7 @@ import UIKit
     private var isInitialized = false
     private var floatingButton: UIButton?
     private weak var gameViewController: UIViewController?
+    private weak var menuViewController: ModMenuViewController?
 
     private override init() {}
 
@@ -58,17 +59,24 @@ import UIKit
     }
 
     private func addFloatingButton(vcPtr: UnsafeMutableRawPointer, viewPtr: UnsafeMutableRawPointer) {
+        // The fallback scanner and the viewDidLoad hook can both arrive.  Keep a
+        // single, small control in the game view rather than stacking overlays.
+        guard floatingButton == nil else { return }
+
         let gameView = Unmanaged<UIView>.fromOpaque(viewPtr).takeUnretainedValue()
         let gameVC = Unmanaged<UIViewController>.fromOpaque(vcPtr).takeUnretainedValue()
         self.gameViewController = gameVC
 
-        // Minecraft-style button
+        // A compact floating action button.  Its fixed bounds ensure only this
+        // visible button intercepts touches; the rest of Minecraft stays usable.
         let button = UIButton(type: .custom)
         button.translatesAutoresizingMaskIntoConstraints = false
+        button.accessibilityLabel = "Open LeviLauncher menu"
+        button.accessibilityHint = "Opens the LeviLauncher mod menu"
 
         // Stone-like background
         button.backgroundColor = UIColor(red: 0.45, green: 0.45, blue: 0.47, alpha: 0.9)
-        button.layer.cornerRadius = 4
+        button.layer.cornerRadius = 22
         button.layer.borderWidth = 2
         button.layer.borderColor = UIColor(red: 0.2, green: 0.2, blue: 0.22, alpha: 1).cgColor
 
@@ -78,14 +86,11 @@ import UIKit
         button.layer.shadowOpacity = 0.5
         button.layer.shadowRadius = 0
 
-        // Content: pickaxe + "M" text
-        var config = UIButton.Configuration.plain()
-        config.title = "Levi"
-        config.image = UIImage(systemName: "hammer.fill")
-        config.imagePadding = 6
-        config.baseForegroundColor = UIColor(red: 0.9, green: 0.9, blue: 0.9, alpha: 1)
-        button.configuration = config
-        button.titleLabel?.font = .boldSystemFont(ofSize: 13)
+        // Content: a recognisable compact launcher icon.
+        button.tintColor = UIColor(red: 0.94, green: 0.94, blue: 0.94, alpha: 1)
+        button.setImage(UIImage(systemName: "hammer.fill"), for: .normal)
+        button.imageView?.contentMode = .scaleAspectFit
+        button.contentEdgeInsets = UIEdgeInsets(top: 11, left: 11, bottom: 11, right: 11)
 
         button.addTarget(self, action: #selector(showMenu), for: .touchUpInside)
 
@@ -94,8 +99,8 @@ import UIKit
         NSLayoutConstraint.activate([
             button.trailingAnchor.constraint(equalTo: gameView.safeAreaLayoutGuide.trailingAnchor, constant: -12),
             button.topAnchor.constraint(equalTo: gameView.safeAreaLayoutGuide.topAnchor, constant: 8),
-            button.widthAnchor.constraint(greaterThanOrEqualToConstant: 80),
-            button.heightAnchor.constraint(equalToConstant: 36),
+            button.widthAnchor.constraint(equalToConstant: 44),
+            button.heightAnchor.constraint(equalToConstant: 44),
         ])
 
         self.floatingButton = button
@@ -103,6 +108,10 @@ import UIKit
 
     @objc private func showMenu() {
         NSLog("[LeviLauncher] showMenu called")
+        guard menuViewController == nil else {
+            NSLog("[LeviLauncher] menu is already visible")
+            return
+        }
         guard let gameVC = gameViewController else {
             NSLog("[LeviLauncher] gameVC is nil, trying fallback")
             if LauncherBridge.injectOverlayNow() {
@@ -113,23 +122,24 @@ import UIKit
             }
             return
         }
-        // Dismiss any already-presented VC first
-        if gameVC.presentedViewController != nil {
-            NSLog("[LeviLauncher] dismissing existing presented VC")
-            gameVC.dismiss(animated: false)
-        }
-        // Find the topmost presented VC to present from
+
+        // Present above any Minecraft sheet already on screen. Dismissing an
+        // existing controller here can interrupt Minecraft's own UI transition.
         var topVC: UIViewController = gameVC
         while let presented = topVC.presentedViewController {
             topVC = presented
         }
-        if topVC != gameVC {
-            NSLog("[LeviLauncher] presenting from topmost VC instead of gameVC")
-        }
         let menuVC = ModMenuViewController()
         menuVC.modalPresentationStyle = .overFullScreen
+        menuVC.modalTransitionStyle = .crossDissolve
+        menuViewController = menuVC
         NSLog("[LeviLauncher] about to present ModMenuViewController")
-        topVC.present(menuVC, animated: true)
+        topVC.present(menuVC, animated: true) { [weak self, weak menuVC] in
+            // If UIKit refuses the presentation, let the launcher button retry.
+            if menuVC?.presentingViewController == nil {
+                self?.menuViewController = nil
+            }
+        }
         NSLog("[LeviLauncher] present returned")
     }
 
