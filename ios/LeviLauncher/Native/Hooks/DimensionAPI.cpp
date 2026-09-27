@@ -3,6 +3,7 @@
 #include "InlineHook.h"
 
 #include <dlfcn.h>
+#include <cstdio>
 #include <mutex>
 #include <vector>
 
@@ -25,6 +26,8 @@ namespace DimensionAPI {
 
     // Try multiple possible symbol patterns
     static const char *kPossibleDimSymbols[] = {
+        "_ZN5Level17registerDimensionENSt3__110unique_ptrI9DimensionNS0_14default_deleteIS2_EEEEj",
+        "_ZN16DimensionManager17registerDimensionENSt3__110unique_ptrI9DimensionNS0_14default_deleteIS2_EEEEj",
         "__ZN5Level17registerDimensionEN3std15unique_ptrI9DimensionNS0_14default_deleteIS1_EEEEj",
         "__ZN17DimensionManager18registerDimensionESt10unique_ptrI9DimensionSt14default_deleteIS0_EEj",
         nullptr
@@ -42,7 +45,7 @@ namespace DimensionAPI {
 
     bool initialize() {
         std::lock_guard<std::mutex> lock(s_mutex);
-        if (s_initialized) return true;
+        if (s_hooksInstalled) return true;
 
         if (!s_hooksInstalled) {
             for (int i = 0; kPossibleDimSymbols[i] != nullptr; i++) {
@@ -53,14 +56,22 @@ namespace DimensionAPI {
                         g_originalRegisterDim = (RegisterDimFunc)orig;
                         s_hooksInstalled = true;
                         break;
+                    } else {
+                        std::fprintf(stderr, "[LeviLauncher] Dimension hook failed for %s: %s\n",
+                                     kPossibleDimSymbols[i], InlineHook::lastError());
                     }
                 }
             }
         }
 
         ContentRegistry::initialize();
-        s_initialized = true;
+        s_initialized = s_hooksInstalled;
         return s_initialized;
+    }
+
+    bool isHooked() {
+        std::lock_guard<std::mutex> lock(s_mutex);
+        return s_hooksInstalled;
     }
 
     void onRegisterDimensions(DimensionProvider provider) {

@@ -3,6 +3,7 @@
 #include "InlineHook.h"
 
 #include <dlfcn.h>
+#include <cstdio>
 #include <mutex>
 #include <vector>
 
@@ -28,8 +29,10 @@ namespace BlockItemAPI {
     // These are static functions called during App::init()
 
     static const char *kPossibleBlockSymbols[] = {
+        "_ZN5Block10initBlocksEv",
+        "_ZN5Block19initBlockRegistriesEv",
         "__ZN5Block10initBlocksEv",
-        "__ZN5Block18initBlockRegistriesEv",
+        "__ZN5Block19initBlockRegistriesEv",
         nullptr
     };
 
@@ -40,6 +43,7 @@ namespace BlockItemAPI {
         if (g_originalBlockInit) g_originalBlockInit();
         {
             std::lock_guard<std::mutex> lock(s_mutex);
+            s_customBlocks.clear();
             for (auto &provider : s_blockProviders) {
                 provider(s_customBlocks);
             }
@@ -53,6 +57,8 @@ namespace BlockItemAPI {
 
     // ── Hook: Item registration ────────────────────────────
     static const char *kPossibleItemSymbols[] = {
+        "_ZN4Item9initItemsEv",
+        "_ZN4Item18initItemRegistriesEv",
         "__ZN4Item9initItemsEv",
         "__ZN4Item18initItemRegistriesEv",
         nullptr
@@ -65,6 +71,7 @@ namespace BlockItemAPI {
         if (g_originalItemInit) g_originalItemInit();
         {
             std::lock_guard<std::mutex> lock(s_mutex);
+            s_customItems.clear();
             for (auto &provider : s_itemProviders) {
                 provider(s_customItems);
             }
@@ -80,7 +87,7 @@ namespace BlockItemAPI {
 
     bool initialize() {
         std::lock_guard<std::mutex> lock(s_mutex);
-        if (s_initialized) return true;
+        if (s_blockHooksInstalled && s_itemHooksInstalled) return true;
 
         if (!s_blockHooksInstalled) {
             for (int i = 0; kPossibleBlockSymbols[i] != nullptr; i++) {
@@ -91,6 +98,9 @@ namespace BlockItemAPI {
                         g_originalBlockInit = (BlockInitFunc)orig;
                         s_blockHooksInstalled = true;
                         break;
+                    } else {
+                        std::fprintf(stderr, "[LeviLauncher] Block hook failed for %s: %s\n",
+                                     kPossibleBlockSymbols[i], InlineHook::lastError());
                     }
                 }
             }
@@ -105,13 +115,26 @@ namespace BlockItemAPI {
                         g_originalItemInit = (ItemInitFunc)orig;
                         s_itemHooksInstalled = true;
                         break;
+                    } else {
+                        std::fprintf(stderr, "[LeviLauncher] Item hook failed for %s: %s\n",
+                                     kPossibleItemSymbols[i], InlineHook::lastError());
                     }
                 }
             }
         }
 
-        s_initialized = true;
+        s_initialized = s_blockHooksInstalled && s_itemHooksInstalled;
         return s_initialized;
+    }
+
+    bool blocksHooked() {
+        std::lock_guard<std::mutex> lock(s_mutex);
+        return s_blockHooksInstalled;
+    }
+
+    bool itemsHooked() {
+        std::lock_guard<std::mutex> lock(s_mutex);
+        return s_itemHooksInstalled;
     }
 
     void onRegisterBlocks(BlockProvider provider) {

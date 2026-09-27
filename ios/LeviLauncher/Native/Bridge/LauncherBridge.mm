@@ -11,12 +11,18 @@
 #include "../InbuiltMods/FpsMod.hpp"
 #include "../InbuiltMods/SnaplookMod.hpp"
 
+extern "C" BOOL LeviLauncherHasJIT(void);
+
 @implementation LauncherBridge
 
 static bool g_preloaderInitialized = false;
 
 + (BOOL)initializePreloader:(NSString *)gamePath {
     if (g_preloaderInitialized) return YES;
+    if (!LeviLauncherHasJIT()) {
+        NSLog(@"[LeviLauncher] Refusing to initialize native hooks without JIT");
+        return NO;
+    }
 
     const char *path = [gamePath UTF8String];
     bool result = Preloader::initialize(path);

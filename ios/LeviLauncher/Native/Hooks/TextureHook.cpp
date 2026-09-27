@@ -2,6 +2,7 @@
 #include "InlineHook.h"
 
 #include <cstring>
+#include <cstdio>
 #include <dlfcn.h>
 #include <mutex>
 #include <unordered_map>
@@ -98,6 +99,8 @@ namespace TextureHook {
 
         void *orig = nullptr;
         if (!InlineHook::install(funcAddr, (void *)hook_loadImage, &orig)) {
+            std::fprintf(stderr, "[LeviLauncher] Texture hook failed: %s\n",
+                         InlineHook::lastError());
             return false;
         }
 

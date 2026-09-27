@@ -4,15 +4,21 @@ import Foundation
     @objc public static let shared = LauncherEntry()
 
     private var isInitialized = false
+    private var isInitializing = false
 
     private override init() {}
 
     @objc public func initialize() {
-        guard !isInitialized else { return }
-        isInitialized = true
+        guard !isInitialized, !isInitializing else { return }
+        isInitializing = true
 
         DispatchQueue.main.async {
-            self.initPreloader()
+            guard self.initPreloader() else {
+                self.isInitializing = false
+                return
+            }
+            self.isInitialized = true
+            self.isInitializing = false
             let modFailures = NativeModManager.shared.loadEnabledMods()
             if !modFailures.isEmpty {
                 NSLog("[LeviLauncher] Native mod load failures: \(modFailures.joined(separator: ", "))")
@@ -23,15 +29,16 @@ import Foundation
         }
     }
 
-    private func initPreloader() {
+    private func initPreloader() -> Bool {
         let bundlePath = Bundle.main.bundlePath
         let result = LauncherBridge.initializePreloader(bundlePath)
         if result {
             NSLog("[LeviLauncher] Preloader initialized for Minecraft \(LauncherBridge.minecraftVersion())")
             MinecraftHook.install()
         } else {
-            NSLog("[LeviLauncher] Preloader initialization failed")
+            NSLog("[LeviLauncher] Preloader initialization blocked or failed")
         }
+        return result
     }
 
     private func startNativeUIFallbackScan(attempts: Int) {

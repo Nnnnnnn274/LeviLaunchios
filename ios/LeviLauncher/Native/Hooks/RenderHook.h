@@ -11,6 +11,7 @@ namespace RenderHook {
 
     // Initialize hooks on minecraftpeViewController drawFrame
     bool initialize();
+    bool isInitialized();
 
     // Register callbacks called from drawFrame before game renders
     // Useful for overlay rendering

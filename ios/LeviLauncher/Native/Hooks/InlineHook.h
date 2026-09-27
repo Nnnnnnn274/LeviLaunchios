@@ -23,8 +23,11 @@ namespace InlineHook {
 
     // Install an inline hook at `target` that redirects to `hook`.
     // On success, writes the original function pointer to `original` and returns true.
-    // The original function pointer points to a trampoline the same length as target.
+    // The original function pointer points to a nearby executable trampoline.
     bool install(void *target, void *hook, void **original);
+
+    // Human-readable reason for the most recent install failure on this thread.
+    const char *lastError();
 
 } // namespace InlineHook
 

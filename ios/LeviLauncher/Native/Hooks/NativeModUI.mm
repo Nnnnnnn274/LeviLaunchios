@@ -3,6 +3,10 @@
 #import <UIKit/UIKit.h>
 
 #include "UIHook.h"
+#include "BlockItemAPI.h"
+#include "DimensionAPI.h"
+#include "RenderHook.h"
+#include "TextureHook.h"
 #include "../InbuiltMods/FpsMod.hpp"
 #include "../InbuiltMods/SnaplookMod.hpp"
 #include "../InbuiltMods/ZoomMod.hpp"
@@ -217,12 +221,18 @@ static UITableViewCell *modCell(UITableView *tableView,
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     (void)tableView;
-    return section == 0 ? builtinMods().count : 4;
+    return section == 0 ? builtinMods().count : 5;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
     (void)tableView;
     return section == 0 ? @"MODDED" : @"LEVI INFO";
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
+    (void)tableView;
+    if (section != 1) return nil;
+    return @"Hooks: B block, I item, D dimension, R render, T texture. + means installed.";
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView
@@ -245,13 +255,25 @@ static UITableViewCell *modCell(UITableView *tableView,
         cell.detailTextLabel.text = [NSString stringWithUTF8String:Preloader::minecraftVersion()];
     } else if (indexPath.row == 1) {
         cell.textLabel.text = @"Mod Injection";
-        cell.detailTextLabel.text = @"ACTIVE";
+        cell.detailTextLabel.text = @"JIT ACTIVE";
         cell.detailTextLabel.textColor = mcGreen();
     } else if (indexPath.row == 2) {
         cell.textLabel.text = @"Prototype Entries";
         const std::size_t total = CreatePort::contentCount() + AetherPort::contentCount() +
             TwilightForestPort::contentCount();
         cell.detailTextLabel.text = [NSString stringWithFormat:@"%zu", total];
+    } else if (indexPath.row == 3) {
+        cell.textLabel.text = @"Native Hooks";
+        cell.detailTextLabel.text = [NSString stringWithFormat:@"B%@ I%@ D%@ R%@ T%@",
+            BlockItemAPI::blocksHooked() ? @"+" : @"-",
+            BlockItemAPI::itemsHooked() ? @"+" : @"-",
+            DimensionAPI::isHooked() ? @"+" : @"-",
+            RenderHook::isInitialized() ? @"+" : @"-",
+            TextureHook::isInitialized() ? @"+" : @"-"];
+        const BOOL coreHooksReady = BlockItemAPI::blocksHooked() &&
+            BlockItemAPI::itemsHooked() && DimensionAPI::isHooked();
+        cell.detailTextLabel.textColor = coreHooksReady ? mcGreen() :
+            [UIColor colorWithRed:0.90 green:0.60 blue:0.18 alpha:1.0];
     } else {
         cell.textLabel.text = @"Loaded Mods";
         cell.detailTextLabel.text = [NSString stringWithFormat:@"%zu", Preloader::getModCount()];
@@ -373,7 +395,7 @@ static UITableViewCell *modCell(UITableView *tableView,
 
 @end
 
-@interface LLModsButtonTarget : NSObject
+@interface LLModsButtonTarget : NSObject <UIPopoverPresentationControllerDelegate>
 - (void)openMods:(UIButton *)sender;
 @end
 
@@ -393,7 +415,6 @@ static UIViewController *topViewController(UIViewController *controller) {
 
 @implementation LLModsButtonTarget
 - (void)openMods:(UIButton *)sender {
-    (void)sender;
     UIViewController *presenter = topViewController(g_gameViewController);
     if (!presenter || [presenter isKindOfClass:[LLNativeModsViewController class]] ||
         [presenter.navigationController.viewControllers.firstObject
@@ -403,9 +424,31 @@ static UIViewController *topViewController(UIViewController *controller) {
 
     LLNativeModsViewController *mods = [[LLNativeModsViewController alloc] init];
     UINavigationController *navigation = [[UINavigationController alloc] initWithRootViewController:mods];
-    navigation.modalPresentationStyle = UIModalPresentationOverFullScreen;
-    navigation.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;
+    CGSize available = sender.window.bounds.size;
+    navigation.preferredContentSize = CGSizeMake(MIN(480.0, MAX(300.0, available.width * 0.58)),
+                                                  MIN(540.0, MAX(280.0, available.height * 0.72)));
+    navigation.modalPresentationStyle = UIModalPresentationPopover;
+    UIPopoverPresentationController *popover = navigation.popoverPresentationController;
+    popover.delegate = self;
+    popover.sourceView = sender;
+    popover.sourceRect = sender.bounds;
+    popover.permittedArrowDirections = UIPopoverArrowDirectionAny;
+    popover.backgroundColor = mcBackground();
     [presenter presentViewController:navigation animated:YES completion:nil];
+}
+
+- (UIModalPresentationStyle)adaptivePresentationStyleForPresentationController:
+    (UIPresentationController *)controller {
+    (void)controller;
+    return UIModalPresentationNone;
+}
+
+- (UIModalPresentationStyle)adaptivePresentationStyleForPresentationController:
+    (UIPresentationController *)controller
+                                               traitCollection:(UITraitCollection *)traitCollection {
+    (void)controller;
+    (void)traitCollection;
+    return UIModalPresentationNone;
 }
 @end
 
@@ -414,29 +457,32 @@ static void installModsButton(UIViewController *gameViewController, UIView *game
 
     g_gameViewController = gameViewController;
     g_gameView = gameView;
+    // Some C++ symbols become visible only after Minecraft finishes creating
+    // its game controller. Retry unresolved hooks at that reliable milestone.
+    BlockItemAPI::initialize();
+    DimensionAPI::initialize();
+    RenderHook::initialize();
+    TextureHook::initialize();
     if ([gameView viewWithTag:kModsButtonTag]) return;
 
     UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
     button.tag = kModsButtonTag;
     button.translatesAutoresizingMaskIntoConstraints = NO;
-    button.backgroundColor = [UIColor colorWithRed:0.38 green:0.38 blue:0.38 alpha:0.96];
+    button.backgroundColor = [UIColor colorWithRed:0.20 green:0.48 blue:0.16 alpha:0.96];
     button.layer.borderWidth = 2.0;
     button.layer.borderColor = mcBorder().CGColor;
-    button.layer.cornerRadius = 2.0;
+    button.layer.cornerRadius = 5.0;
     button.layer.shadowColor = [UIColor blackColor].CGColor;
     button.layer.shadowOffset = CGSizeMake(0.0, 3.0);
     button.layer.shadowOpacity = 0.8;
     button.layer.shadowRadius = 0.0;
-    button.titleLabel.font = mcFont(14.0);
     button.tintColor = [UIColor whiteColor];
     button.accessibilityLabel = @"Mods";
     button.accessibilityHint = @"Opens the native Minecraft mods screen";
-    [button setTitle:@"  MODS" forState:UIControlStateNormal];
-    [button setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-    [button setTitleColor:[UIColor colorWithWhite:0.75 alpha:1.0]
-                 forState:UIControlStateHighlighted];
-    [button setImage:[UIImage systemImageNamed:@"shippingbox.fill"] forState:UIControlStateNormal];
-    [button setBackgroundImage:nil forState:UIControlStateNormal];
+    UIImageSymbolConfiguration *leafConfig =
+        [UIImageSymbolConfiguration configurationWithPointSize:18.0 weight:UIImageSymbolWeightBold];
+    [button setImage:[[UIImage systemImageNamed:@"leaf.fill"] imageWithConfiguration:leafConfig]
+             forState:UIControlStateNormal];
 
     g_buttonTarget = [[LLModsButtonTarget alloc] init];
     [button addTarget:g_buttonTarget action:@selector(openMods:) forControlEvents:UIControlEventTouchUpInside];
@@ -446,13 +492,13 @@ static void installModsButton(UIViewController *gameViewController, UIView *game
                                              constant:-12.0],
         [button.topAnchor constraintEqualToAnchor:gameView.safeAreaLayoutGuide.topAnchor
                                           constant:8.0],
-        [button.widthAnchor constraintEqualToConstant:116.0],
-        [button.heightAnchor constraintEqualToConstant:42.0]
+        [button.widthAnchor constraintEqualToConstant:40.0],
+        [button.heightAnchor constraintEqualToConstant:40.0]
     ]];
 
     CALayer *highlight = [CALayer layer];
     highlight.backgroundColor = [UIColor colorWithWhite:0.72 alpha:0.8].CGColor;
-    highlight.frame = CGRectMake(2.0, 2.0, 112.0, 2.0);
+    highlight.frame = CGRectMake(2.0, 2.0, 36.0, 2.0);
     [button.layer addSublayer:highlight];
     refreshFpsOverlay();
 }

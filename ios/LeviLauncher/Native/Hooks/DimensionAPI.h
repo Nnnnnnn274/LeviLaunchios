@@ -42,6 +42,7 @@ namespace DimensionAPI {
     // ── API ───────────────────────────────────────────────
 
     bool initialize();
+    bool isHooked();
 
     // Register a provider that adds custom dimensions
     void onRegisterDimensions(DimensionProvider provider);

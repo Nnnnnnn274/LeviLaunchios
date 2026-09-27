@@ -62,6 +62,8 @@ namespace BlockItemAPI {
     // ── API ───────────────────────────────────────────────
 
     bool initialize();
+    bool blocksHooked();
+    bool itemsHooked();
 
     void onRegisterBlocks(BlockProvider provider);
     void onRegisterItems(ItemProvider provider);

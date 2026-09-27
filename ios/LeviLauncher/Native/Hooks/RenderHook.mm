@@ -58,6 +58,10 @@ namespace RenderHook {
         return true;
     }
 
+    bool isInitialized() {
+        return g_initialized;
+    }
+
     void onBeforeFrame(DrawCallback callback) {
         std::lock_guard<std::mutex> lock(g_mutex);
         g_beforeDrawCallbacks.push_back(std::move(callback));
