@@ -1,7 +1,6 @@
 #include "InlineHook.h"
 #include <cstring>
 #include <mach/mach.h>
-#include <mach/mach_vm.h>
 #include <libkern/OSCacheControl.h>
 
 namespace InlineHook {
@@ -42,15 +41,15 @@ namespace InlineHook {
                    VM_PROT_READ | VM_PROT_EXECUTE);
     }
 
-    static void *tryAllocateAt(mach_vm_address_t address, size_t pageSize) {
-        mach_vm_address_t candidate = address;
-        kern_return_t result = mach_vm_allocate(mach_task_self(), &candidate,
-                                                (mach_vm_size_t)pageSize, VM_FLAGS_FIXED);
+    static void *tryAllocateAt(vm_address_t address, size_t pageSize) {
+        vm_address_t candidate = address;
+        kern_return_t result = vm_allocate(mach_task_self(), &candidate,
+                                           (vm_size_t)pageSize, VM_FLAGS_FIXED);
         if (result != KERN_SUCCESS) return nullptr;
         result = vm_protect(mach_task_self(), (vm_address_t)candidate, pageSize, false,
                             VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE);
         if (result != KERN_SUCCESS) {
-            mach_vm_deallocate(mach_task_self(), candidate, (mach_vm_size_t)pageSize);
+            vm_deallocate(mach_task_self(), candidate, (vm_size_t)pageSize);
             return nullptr;
         }
         return (void *)(uintptr_t)candidate;
@@ -111,16 +110,16 @@ namespace InlineHook {
         originalThunk[1] = branchInst((uintptr_t)(originalThunk + 1),
                                       (uintptr_t)target + kInstSize);
         if (originalThunk[1] == 0) {
-            mach_vm_deallocate(mach_task_self(), (mach_vm_address_t)trampolinePage,
-                               (mach_vm_size_t)vm_page_size);
+            vm_deallocate(mach_task_self(), (vm_address_t)trampolinePage,
+                          (vm_size_t)vm_page_size);
             g_lastError = "original trampoline is outside ARM64 branch range";
             return false;
         }
 
         uint32_t islandBranch = branchInst((uintptr_t)target, (uintptr_t)trampoline);
         if (islandBranch == 0) {
-            mach_vm_deallocate(mach_task_self(), (mach_vm_address_t)trampolinePage,
-                               (mach_vm_size_t)vm_page_size);
+            vm_deallocate(mach_task_self(), (vm_address_t)trampolinePage,
+                          (vm_size_t)vm_page_size);
             g_lastError = "branch island is outside ARM64 branch range";
             return false;
         }
@@ -128,15 +127,15 @@ namespace InlineHook {
         sys_icache_invalidate(trampolinePage, kInstSize * 6);
         if (vm_protect(mach_task_self(), (vm_address_t)trampolinePage, vm_page_size, false,
                        VM_PROT_READ | VM_PROT_EXECUTE) != KERN_SUCCESS) {
-            mach_vm_deallocate(mach_task_self(), (mach_vm_address_t)trampolinePage,
-                               (mach_vm_size_t)vm_page_size);
+            vm_deallocate(mach_task_self(), (vm_address_t)trampolinePage,
+                          (vm_size_t)vm_page_size);
             g_lastError = "could not seal trampoline as executable";
             return false;
         }
 
         if (!makeMemoryWritable(target, kInstSize)) {
-            mach_vm_deallocate(mach_task_self(), (mach_vm_address_t)trampolinePage,
-                               (mach_vm_size_t)vm_page_size);
+            vm_deallocate(mach_task_self(), (vm_address_t)trampolinePage,
+                          (vm_size_t)vm_page_size);
             g_lastError = "JIT could not make target text writable";
             return false;
         }

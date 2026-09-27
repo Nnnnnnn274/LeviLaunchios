@@ -145,9 +145,10 @@ static bool g_preloaderInitialized = false;
 + (BOOL)setTextureOverrides:(NSDictionary<NSString *, NSString *> *)overrides {
     std::vector<std::pair<std::string, std::string>> nativeOverrides;
     nativeOverrides.reserve(overrides.count);
-    [overrides enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSString *value, BOOL *) {
+    for (NSString *key in overrides) {
+        NSString *value = overrides[key];
         nativeOverrides.emplace_back(key.UTF8String ?: "", value.UTF8String ?: "");
-    }];
+    }
     TextureHook::setTextureOverrides(nativeOverrides);
     return TextureHook::initialize() ? YES : NO;
 }

@@ -7,7 +7,6 @@
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
 #import <mach/mach.h>
-#import <mach/mach_vm.h>
 #import <stdint.h>
 
 #pragma mark - Diagnostics (write to app's Documents dir)
@@ -119,13 +118,13 @@ BOOL LeviLauncherHasJIT(void) {
 
     // InlineHook also needs an executable trampoline page. Probe the same Mach
     // allocation/protection path so initialization cannot fail halfway through.
-    mach_vm_address_t trampoline = 0;
-    result = mach_vm_allocate(mach_task_self(), &trampoline, vm_page_size,
-                              VM_FLAGS_ANYWHERE);
+    vm_address_t trampoline = 0;
+    result = vm_allocate(mach_task_self(), &trampoline, vm_page_size,
+                         VM_FLAGS_ANYWHERE);
     if (result != KERN_SUCCESS) return NO;
     result = vm_protect(mach_task_self(), (vm_address_t)trampoline, vm_page_size, false,
                         VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE);
-    mach_vm_deallocate(mach_task_self(), trampoline, vm_page_size);
+    vm_deallocate(mach_task_self(), trampoline, vm_page_size);
     if (result != KERN_SUCCESS) return NO;
     return YES;
 }
