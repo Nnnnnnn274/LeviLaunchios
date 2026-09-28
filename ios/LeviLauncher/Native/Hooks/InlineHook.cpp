@@ -13,33 +13,6 @@ namespace InlineHook {
         return g_lastError;
     }
 
-    static bool hasProtection(void *address, vm_prot_t required) {
-        vm_address_t regionAddress = (vm_address_t)address;
-        vm_size_t regionSize = 0;
-        vm_region_basic_info_data_64_t info = {};
-        mach_msg_type_number_t count = VM_REGION_BASIC_INFO_COUNT_64;
-        mach_port_t objectName = MACH_PORT_NULL;
-        kern_return_t result = vm_region(mach_task_self(), &regionAddress, &regionSize,
-                                         VM_REGION_BASIC_INFO_64, (vm_region_info_t)&info,
-                                         &count, &objectName);
-        if (objectName != MACH_PORT_NULL) mach_port_deallocate(mach_task_self(), objectName);
-        return result == KERN_SUCCESS && regionAddress <= (vm_address_t)address &&
-               (info.protection & required) == required;
-    }
-
-    static bool canAllocateExecutableTrampoline() {
-        vm_address_t probe = 0;
-        const vm_size_t pageSize = vm_page_size;
-        if (vm_allocate(mach_task_self(), &probe, pageSize, VM_FLAGS_ANYWHERE) != KERN_SUCCESS) {
-            return false;
-        }
-        const vm_prot_t needed = VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE;
-        bool available = vm_protect(mach_task_self(), probe, pageSize, false, needed) == KERN_SUCCESS &&
-                         hasProtection((void *)probe, needed);
-        vm_deallocate(mach_task_self(), probe, pageSize);
-        return available;
-    }
-
     static bool isPcRelative(uint32_t instruction) {
         // A one-instruction trampoline may copy ordinary prologue operations,
         // but relocating any of these changes its target or literal address.
@@ -56,13 +29,8 @@ namespace InlineHook {
         const size_t pageSize = (size_t)vm_page_size;
         uintptr_t pageStart = (uintptr_t)addr & ~(pageSize - 1);
         size_t regionSize = ((uintptr_t)addr + size - pageStart + pageSize - 1) & ~(pageSize - 1);
-        const vm_prot_t needed = VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE;
-        if (vm_protect(mach_task_self(), (vm_address_t)pageStart, regionSize, false,
-                       needed) != KERN_SUCCESS) return false;
-        if (hasProtection(addr, needed)) return true;
-        vm_protect(mach_task_self(), (vm_address_t)pageStart, regionSize, false,
-                   VM_PROT_READ | VM_PROT_EXECUTE);
-        return false;
+        return vm_protect(mach_task_self(), (vm_address_t)pageStart, regionSize, false,
+                          VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE) == KERN_SUCCESS;
     }
 
     static void restoreMemoryExecutable(void *addr, size_t size) {
@@ -119,10 +87,6 @@ namespace InlineHook {
         }
         if (((uintptr_t)target & (kInstSize - 1)) != 0) {
             g_lastError = "target is not ARM64 instruction-aligned";
-            return false;
-        }
-        if (!canAllocateExecutableTrampoline()) {
-            g_lastError = "executable trampoline permission unavailable";
             return false;
         }
 
