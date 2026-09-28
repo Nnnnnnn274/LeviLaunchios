@@ -1,12 +1,10 @@
 // LeviLauncher dylib entry point
-// Constructor waits for executable-memory access, then polls for Swift and
-// initializes. This build intentionally requires JIT because native content
-// hooks patch Minecraft's ARM64 text pages.
+// Constructor waits for the Swift entry point before initializing the loader.
+// Inline text hooks check their own memory permissions when installed.
 
 #import <Foundation/Foundation.h>
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
-#import <mach/mach.h>
 #import <stdint.h>
 
 #pragma mark - Diagnostics (write to app's Documents dir)
@@ -100,34 +98,7 @@ static void levi_exception_handler(NSException *exception) {
 
 #pragma mark - Initialization
 
-static BOOL g_waiting_for_jit = NO;
 static BOOL g_initialization_started = NO;
-
-__attribute__((noinline, visibility("default")))
-BOOL LeviLauncherHasJIT(void) {
-    vm_address_t address = (vm_address_t)(uintptr_t)&LeviLauncherHasJIT;
-    vm_address_t page = address & ~((vm_address_t)vm_page_size - 1);
-    kern_return_t result = vm_protect(mach_task_self(), page, vm_page_size, false,
-                                      VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE);
-    if (result != KERN_SUCCESS) return NO;
-
-    // The probe changes permissions only, never code bytes. Restore the normal
-    // text-page protection before starting the hook engine.
-    vm_protect(mach_task_self(), page, vm_page_size, false,
-               VM_PROT_READ | VM_PROT_EXECUTE);
-
-    // InlineHook also needs an executable trampoline page. Probe the same Mach
-    // allocation/protection path so initialization cannot fail halfway through.
-    vm_address_t trampoline = 0;
-    result = vm_allocate(mach_task_self(), &trampoline, vm_page_size,
-                         VM_FLAGS_ANYWHERE);
-    if (result != KERN_SUCCESS) return NO;
-    result = vm_protect(mach_task_self(), (vm_address_t)trampoline, vm_page_size, false,
-                        VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE);
-    vm_deallocate(mach_task_self(), trampoline, vm_page_size);
-    if (result != KERN_SUCCESS) return NO;
-    return YES;
-}
 
 static void try_init(int retry) {
     // Primary: exact name with explicit @objc(LauncherEntry)
@@ -166,35 +137,17 @@ static void try_init(int retry) {
      object:nil];
 }
 
-static void wait_for_jit(int retry) {
-    if (LeviLauncherHasJIT()) {
-        g_waiting_for_jit = NO;
-        g_initialization_started = YES;
-        levi_log(@"JIT executable-memory probe succeeded");
-        try_init(0);
-        return;
-    }
-
-    if (retry == 0 || retry % 20 == 0) {
-        levi_log(@"Waiting for JIT before loading native hooks (attempt %d)", retry + 1);
-    }
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        wait_for_jit(retry + 1);
-    });
-}
-
-static void start_when_jit_is_ready(void) {
-    if (g_waiting_for_jit || g_initialization_started) return;
-    g_waiting_for_jit = YES;
-    wait_for_jit(0);
+static void start_initialization(void) {
+    if (g_initialization_started) return;
+    g_initialization_started = YES;
+    try_init(0);
 }
 
 // Public symbol for injectors that want direct activation
 __attribute__((visibility("default")))
 void LeviLauncherInit(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        start_when_jit_is_ready();
+        start_initialization();
     });
 }
 
@@ -213,7 +166,7 @@ static void levi_launcher_init(void) {
         levi_log(@"Constructor running");
         // Schedule on main run loop (more reliable at load time than dispatch_async)
         CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopDefaultMode, ^{
-            start_when_jit_is_ready();
+            start_initialization();
         });
         CFRunLoopWakeUp(CFRunLoopGetMain());
     }
